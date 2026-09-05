@@ -1,0 +1,21 @@
+@import 'tailwindcss';
+
+.gothic-heading {
+    font-family: "UnifrakturCook", cursive;
+    font-weight: 700;
+    font-style: normal;
+}
+
+.gothic-sub-heading {
+    font-family: "Cinzel Decorative", cursive;
+    font-weight: 700;
+    font-style: normal;
+}
+
+html {
+  visibility: hidden;
+}
+
+html.fonts-loaded {
+  visibility: visible;
+}
