@@ -30,13 +30,13 @@ const App: Component = () => {
       <div>
         <div class="flex flex-row p-4 gap-4 content-end justify-end">
           <a href="/playbook" class="bg-red-800 text-white p-4 rounded-full flex">
-            <Icon icon="material-symbols:person" class="text-4xl" />
+            <Icon icon="game-icons:character" class="text-4xl" />
           </a>
           <a href="/tarot" class="bg-purple-800 text-white p-4 rounded-full flex">
-            <Icon icon="material-symbols:playing-cards" class="text-4xl" />
+            <Icon icon="game-icons:poker-hand" class="text-4xl" />
           </a>
           <a href="/grimoire" class="bg-teal-800 text-white p-4 rounded-full flex">
-            <Icon icon="mdi:book-open" class="text-4xl" />
+            <Icon icon="game-icons:tentacles-skull" class="text-4xl" />
           </a>
         </div>
       </div>

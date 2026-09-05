@@ -27,7 +27,7 @@ const TarotCardRoute = () => {
                 <p>{entity?.name ?? "No entity"}</p>
             </div>
             <div class="bg-orange-800 text-white p-4 rounded-full flex">
-                <Icon icon="material-symbols:target" class="text-2xl"
+                <Icon icon="game-icons:tentacles-skull" class="text-2xl"
                     onClick={() => {
                         appContext?.setContextValue({
                             ...appContext.contextValue(),
@@ -52,7 +52,7 @@ const TarotCardRoute = () => {
                 <Switch>
                     <Match when={arcana?.rule_face_up}>
                         <div class="bg-orange-800 text-white p-4 rounded-full flex">
-                            <Icon icon="material-symbols:keep" class="text-2xl"
+                            <Icon icon="game-icons:card-play" class="text-2xl"
                                 onClick={() => {
                                     appContext?.setContextValue({
                                         ...appContext.contextValue(),
@@ -72,7 +72,7 @@ const TarotCardRoute = () => {
                 <Switch>
                     <Match when={arcana?.rule_face_down}>
                         <div class="bg-orange-800 text-white p-4 rounded-full flex">
-                            <Icon icon="material-symbols:keep" class="text-2xl"
+                            <Icon icon="game-icons:card-play" class="text-2xl"
                                 onClick={() => {
                                     appContext?.setContextValue({
                                         ...appContext.contextValue(),
