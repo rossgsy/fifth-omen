@@ -1,12 +1,13 @@
-import { createContext, createSignal, JSX } from "solid-js";
+import { createContext, createSignal, JSX, Accessor } from "solid-js";
 
 export const AppContext = createContext<{
-    contextValue: AppContextValue;
+    contextValue: Accessor<AppContextValue>;
     setContextValue: (value: AppContextValue) => void;
 }>();
 
 export interface AppContextValue {
     selectedPlaybook: number | null;
+    playerHealth: number;
 }
 
 export interface AppContextProviderProps {
@@ -14,13 +15,17 @@ export interface AppContextProviderProps {
 }
 
 const AppContextProvider = (props: AppContextProviderProps) => {
-    const [contextValue, setContextValue] = createSignal<AppContextValue>({
-        selectedPlaybook: null
-    });
+    let storedContext = window.localStorage.getItem('appContext');
+    let initialContext = storedContext ? JSON.parse(storedContext) : { selectedPlaybook: 0, playerHealth: 8 };
+
+    const [contextValue, setContextValue] = createSignal<AppContextValue>(initialContext);
 
     return <AppContext.Provider value={{
-        contextValue: contextValue(),
-        setContextValue
+        contextValue: contextValue,
+        setContextValue: (value) => {
+            window.localStorage.setItem('appContext', JSON.stringify(value));
+            setContextValue(value);
+        }
     }}>{props.children}</AppContext.Provider>
 };
 

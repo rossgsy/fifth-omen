@@ -1,14 +1,14 @@
-import { Match, onMount, Switch, createSignal, useContext } from "solid-js";
+import { Match, Switch, useContext } from "solid-js";
 import { AppContext } from "../data/app";
 import PlaybookComponent from "../Playbook";
-import { Playbook, playbooks } from "../game";
+import { playbooks } from "../game";
 
 const PlaybookRoute = () => {
     const appContext = useContext(AppContext);
 
-    return <Switch>
-        <Match when={appContext?.contextValue.selectedPlaybook !== null}>
-            <PlaybookComponent playbook={playbooks[appContext?.contextValue.selectedPlaybook!]} />
+    return <Switch fallback={<div>Select a playbook</div>}>
+        <Match when={appContext?.contextValue()?.selectedPlaybook !== null}>
+            <PlaybookComponent playbook={playbooks[appContext?.contextValue()?.selectedPlaybook!]} />
         </Match>
     </Switch>;
 };

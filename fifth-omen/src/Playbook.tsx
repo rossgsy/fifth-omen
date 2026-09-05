@@ -1,4 +1,5 @@
-import { For, createSignal } from "solid-js";
+import { For, createSignal, useContext } from "solid-js";
+import { AppContext } from "./data/app";
 import { Playbook, Action } from "./game";
 
 type HealthTrackerProps = {
@@ -8,11 +9,11 @@ type HealthTrackerProps = {
 };
 
 export function HealthTracker(props: HealthTrackerProps) {
-    const [health, setHealth] = createSignal(props.initial ?? props.max);
+    const appContext = useContext(AppContext);
 
     const update = (value: number) => {
         const next = Math.max(0, Math.min(props.max, value));
-        setHealth(next);
+        appContext?.setContextValue({ ...appContext.contextValue(), playerHealth: next });
         props.onChange?.(next);
     };
 
@@ -22,12 +23,12 @@ export function HealthTracker(props: HealthTrackerProps) {
             <div class="flex flex-wrap gap-2">
                 <For each={Array.from({ length: props.max }, (_, i) => i + 1)}>
                     {(hp) => {
-                        const filled = () => hp <= health();
+                        const filled = () => hp <= (appContext?.contextValue()?.playerHealth ?? 0);
                         return (
                             <button
                                 type="button"
                                 aria-label={`Set health to ${hp}`}
-                                onClick={() => update(hp === health() ? hp - 1 : hp)}
+                                onClick={() => update(hp === appContext?.contextValue()?.playerHealth ? hp - 1 : hp)}
                                 class="
                                 flex h-9 w-9 items-center justify-center
                                 rounded-md border
@@ -71,9 +72,6 @@ const PlaybookComponent = (props: PlaybookComponentProps) => {
         <h2 class="gothic-sub-heading text-2xl text-center">{props.playbook.name}</h2>
         <HealthTracker
             max={props.playbook.health}
-            onChange={(health) => {
-                console.log("health", health);
-            }}
         />
         <div class="flex gap-2 flex-col">
             <h3 class="gothic-sub-heading">Draft Ability</h3>

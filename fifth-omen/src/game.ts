@@ -1,27 +1,27 @@
-const MajorArcana = {
-    0: "The Fool",
-    1: "The Magician",
-    2: "The High Priestess",
-    3: "The Empress",
-    4: "The Emperor",
-    5: "The Hierophant",
-    6: "The Lovers",
-    7: "The Chariot",
-    8: "Strength",
-    9: "The Hermit",
-    10: "Wheel of Fortune",
-    11: "Justice",
-    12: "The Hanged Man",
-    13: "Death",
-    14: "Temperance",
-    15: "The Devil",
-    16: "The Tower",
-    17: "The Star",
-    18: "The Moon",
-    19: "The Sun",
-    20: "Judgement",
-    21: "The World",
-}
+export const MajorArcana = [
+    "The Fool",
+    "The Magician",
+    "The High Priestess",
+    "The Empress",
+    "The Emperor",
+    "The Hierophant",
+    "The Lovers",
+    "The Chariot",
+    "Strength",
+    "The Hermit",
+    "Wheel of Fortune",
+    "Justice",
+    "The Hanged Man",
+    "Death",
+    "Temperance",
+    "The Devil",
+    "The Tower",
+    "The Star",
+    "The Moon",
+    "The Sun",
+    "Judgement",
+    "The World"
+]
 
 export interface Action {
     requirement?: string;
@@ -118,3 +118,35 @@ export const Folio1: Folio = {
         }
     }
 }
+
+// used to lookup the major arcana
+export const numeral_to_number: (value: string) => number = (value) => {
+    let ucase_value = value.toUpperCase();
+
+    const map: { [key: string]: number } = {
+        "0": 0,
+        "I": 1,
+        "II": 2,
+        "III": 3,
+        "IV": 4,
+        "V": 5,
+        "VI": 6,
+        "VII": 7,
+        "VIII": 8,
+        "IX": 9,
+        "X": 10,
+        "XI": 11,
+        "XII": 12,
+        "XIII": 13,
+        "XIV": 14,
+        "XV": 15,
+        "XVI": 16,
+        "XVII": 17,
+        "XVIII": 18,
+        "XIX": 19,
+        "XX": 20,
+        "XXI": 21,
+        "XXII": 22
+    };
+    return map[ucase_value];
+};
