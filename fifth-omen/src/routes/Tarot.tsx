@@ -18,7 +18,7 @@ const TarotRoute = () => {
         }, 300);
     };
 
-    return <div>
+    return <div class="flex flex-col items-stretch justify-center min-h-100 grow ">
         <input type="text" placeholder="Enter card numeral" class="p-2 m-4 border rounded" value={input()} onInput={(e) => setInput(e.currentTarget.value)} />
         <button class="p-2 m-4 border rounded" onClick={handleInput}>Go</button>
     </div>

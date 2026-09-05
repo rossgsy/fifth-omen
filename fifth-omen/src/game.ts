@@ -47,10 +47,28 @@ export interface Entity {
     name: string;
 }
 
+export interface Encounter {
+    name: string;
+    rule: string;
+    tarot_cards: number[];
+}
+
+export interface Arcana {
+    rule_face_up: string;
+    rule_face_down: string;
+    tarot_cards: number[];
+}
+
 export interface Folio {
     name: string;
     entities: {
         [key: number]: Entity;
+    }
+    encounters: {
+        [key: number]: Encounter;
+    },
+    arcanas: {
+        [key: number]: Arcana;
     }
 }
 
@@ -99,22 +117,47 @@ export const Folio1: Folio = {
     name: "The Black Parish",
     entities: {
         0: {
-            name: "The Drowned Bishop"
-        },
-        1: {
-            name: "The Salt Widow"
-        },
-        2: {
-            name: "The Glass Prophet"
-        },
-        3: {
             name: "The Hollow Saint"
         },
-        4: {
-            name: "The Crooked King"
+        1: {
+            name: "The Pale Mourner"
         },
-        5: {
-            name: "The Silent Child"
+        2: {
+            name: "The Crooked King"
+        }
+    },
+    encounters: {
+        0: {
+            name: "The Black Well",
+            rule: "Each player may choose to Take 1 Damage to heal another player 1HP AND remove 1 Doom.",
+            tarot_cards: [0, 3, 5, 9, 10, 17, 18, 19, 20]
+        },
+        1: {
+            name: "The Blood Offering",
+            rule: "One player loses 2 HP. Remove 3 Doom.",
+            tarot_cards: [1, 2, 4, 11, 12, 16, 21]
+        },
+        2: {
+            name: "The Wayside Altar",
+            rule: "Choose one: remove 2 Doom or each player recovers 1 HP.",
+            tarot_cards: [6, 7, 8, 13, 14, 15, 22]
+        }
+    },
+    arcanas: {
+        0: {
+            rule_face_up: "After the first draft pass each round, reroll the remaining dice",
+            rule_face_down: "Once per round, one player may treat one drafted die as ±1 for their action only",
+            tarot_cards: [12, 18]
+        },
+        1: {
+            rule_face_up: "Two-die actions deal +1 damage",
+            rule_face_down: "Single-die actions deal +1 damage",
+            tarot_cards: [10]
+        },
+        2: {
+            rule_face_up: "At the end of each round, if no player took Damage, add 1 Doom",
+            rule_face_down: "At the end of each round, if at least one player took Damage, remove 1 Doom",
+            tarot_cards: [19]
         }
     }
 }
@@ -150,3 +193,14 @@ export const numeral_to_number: (value: string) => number = (value) => {
     };
     return map[ucase_value];
 };
+
+
+export const lookup_arcana_for_card = (id: number) => {
+    let values = Object.values(Folio1.arcanas).filter(arcana => arcana.tarot_cards.includes(id));
+    return values.length > 0 ? values[0] : null;
+}
+
+export const lookup_encounter_for_card = (id: number) => {
+    let values = Object.values(Folio1.encounters).filter(encounter => encounter.tarot_cards.includes(id));
+    return values.length > 0 ? values[0] : null;
+}

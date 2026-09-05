@@ -21,8 +21,7 @@ const App: Component = () => {
           <Router>
             <Route path="/" component={HomeRoute} />
             <Route path="/playbook" component={PlaybookRoute} />
-            <Route path="/grimoire" component={GrimoireListRoute} />
-            <Route path="/grimoire/:id" component={GrimoireEntryRoute} />
+            <Route path="/grimoire" component={GrimoireEntryRoute} />
             <Route path="/tarot" component={TarotRoute} />
             <Route path="/tarot/:id" component={TarotCardRoute} />
           </Router>

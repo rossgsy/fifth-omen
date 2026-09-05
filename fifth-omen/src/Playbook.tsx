@@ -70,19 +70,23 @@ export interface PlaybookComponentProps {
 const PlaybookComponent = (props: PlaybookComponentProps) => {
     return <div class="flex flex-col gap-4 justify-items-stretch p-4 max-w-lg">
         <h2 class="gothic-sub-heading text-2xl text-center">{props.playbook.name}</h2>
+        <hr/>
         <HealthTracker
             max={props.playbook.health}
         />
+        <hr/>
         <div class="flex gap-2 flex-col">
             <h3 class="gothic-sub-heading">Draft Ability</h3>
             <p>{props.playbook.draftAbility}</p>
         </div>
+        <hr/>
         <div class="flex gap-2 flex-col">
             <h3 class="gothic-sub-heading">Actions</h3>
             {props.playbook.actions.map(action => (
                 <PlaybookActionComponent action={action} />
             ))}
         </div>
+        <hr/>
     </div>;
 };
 

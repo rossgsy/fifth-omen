@@ -8,6 +8,7 @@ export const AppContext = createContext<{
 export interface AppContextValue {
     selectedPlaybook: number | null;
     playerHealth: number;
+    activeEntity: number | null;
 }
 
 export interface AppContextProviderProps {
