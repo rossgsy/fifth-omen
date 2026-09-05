@@ -1,29 +1,5 @@
-
-export interface Action {
-    requirement?: string;
-    diceRule: string;
-    name: string;
-    description: string;
-}
-
-export interface Playbook {
-    name: string;
-    health: number;
-    draftAbility: string;
-    actions: Action[];
-    progressionActions: Action[];
-}
-
-export interface ProgressionStep {
-    left: string;
-    right: string;
-}
-
-export interface PlaybookComponentProps {
-    playbook: Playbook;
-}
-
 import { For, createSignal } from "solid-js";
+import { Playbook, Action } from "./game";
 
 type HealthTrackerProps = {
     max: number;
@@ -74,6 +50,7 @@ export function HealthTracker(props: HealthTrackerProps) {
     );
 }
 
+
 const PlaybookActionComponent = (props: { action: Action }) => {
     return <div class="flex flex-row gap-2">
         <div class="w-16 shrink-0 tabular-nums">{props.action.diceRule}</div>
@@ -84,9 +61,14 @@ const PlaybookActionComponent = (props: { action: Action }) => {
     </div>;
 };
 
+
+export interface PlaybookComponentProps {
+    playbook: Playbook;
+}
+
 const PlaybookComponent = (props: PlaybookComponentProps) => {
-    return <div class="flex flex-col gap-4 items-start justify-stretch border border-white p-4 max-w-lg">
-        <h2 class="gothic-sub-heading text-2xl">{props.playbook.name}</h2>
+    return <div class="flex flex-col gap-4 justify-items-stretch p-4 max-w-lg">
+        <h2 class="gothic-sub-heading text-2xl text-center">{props.playbook.name}</h2>
         <HealthTracker
             max={props.playbook.health}
             onChange={(health) => {
