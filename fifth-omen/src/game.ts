@@ -43,8 +43,17 @@ export interface ProgressionStep {
     right: string;
 }
 
+export interface EntityAction {
+    diceRule: string;
+    description: string;
+}
+
 export interface Entity {
     name: string;
+    presenceRule: string;
+    first_draft_actions: EntityAction[];
+    second_draft_actions: EntityAction[];
+    doom_rule: string;
 }
 
 export interface Encounter {
@@ -117,13 +126,63 @@ export const Folio1: Folio = {
     name: "The Black Parish",
     entities: {
         0: {
-            name: "The Hollow Saint"
+            name: "The Hollow Saint",
+            presenceRule: "10 + 2 per Player",
+            first_draft_actions: [
+                {
+                    diceRule: "1-2",
+                    description: "Action deals +1 damage"
+                },
+                {
+                    diceRule: "3-4",
+                    description: "If any Ward was generated this round, recover 1 Presence."
+                },
+                {   
+                    diceRule: "5-6",
+                    description: "Action also adds 1 Doom."
+                }
+            ],
+            second_draft_actions: [
+                {
+                    diceRule: "1",
+                    description: "2 Damage to first player."
+                },
+                {
+                    diceRule: "2",
+                    description: "Deal 3 Damage to the first player who generated Ward this round. If none did, add 1 Doom."
+                },
+                {
+                    diceRule: "3",
+                    description: "Recover 1 presence for each Ward generated this round to a maximum of 3. then add 1 Doom."
+                },
+                {
+                    diceRule: "4",
+                    description: "Recover 2 Presence and add 1 Doom."
+                },
+                {
+                    diceRule: "5",
+                    description: "Deal 3 Damage to the first player who generated no Ward this round."
+                },
+                {
+                    diceRule: "6",
+                    description: "Deal 1 Damage to every player, ignoring Ward."
+                }
+            ],
+            doom_rule: "When Doom fills, deal 2 Damage to every player."
         },
         1: {
-            name: "The Pale Mourner"
+            name: "The Pale Mourner",
+            presenceRule: "10 + 2 per Player",
+            first_draft_actions: [],
+            second_draft_actions: [],
+            doom_rule: ""
         },
         2: {
-            name: "The Crooked King"
+            name: "The Crooked King",
+            presenceRule: "12 + 2 per Player",
+            first_draft_actions: [],
+            second_draft_actions: [],
+            doom_rule: ""
         }
     },
     encounters: {

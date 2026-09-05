@@ -1,6 +1,6 @@
 import { For, createSignal, useContext } from "solid-js";
-import { AppContext } from "./data/app";
-import { Playbook, Action } from "./game";
+import { AppContext } from "../data/app";
+import { Playbook, Action } from "../game";
 
 type HealthTrackerProps = {
     max: number;

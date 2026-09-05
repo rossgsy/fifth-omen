@@ -13,7 +13,7 @@ const App: Component = () => {
 
   return (
     <div class="flex justify-between items-stretch h-screen flex-col bg-zinc-900">
-      <div class="p-4">
+      <div class="p-4 border-b-1 border-b-white">
         <a href="/" class="block gothic-heading text-6xl text-center text-white">Fifth Omen</a>
       </div>
       <div class="text-white grow flex overflow-auto items-stretch flex-col">

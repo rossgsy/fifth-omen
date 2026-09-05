@@ -1,6 +1,6 @@
 import { Match, Switch, useContext } from "solid-js";
 import { AppContext } from "../data/app";
-import PlaybookComponent from "../Playbook";
+import PlaybookComponent from "../components/Playbook";
 import { playbooks } from "../game";
 
 const PlaybookRoute = () => {

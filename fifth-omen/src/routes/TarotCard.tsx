@@ -1,6 +1,6 @@
 import { useParams } from "@solidjs/router";
 import { Folio1, MajorArcana, lookup_arcana_for_card, lookup_encounter_for_card } from "../game";
-import { useContext } from "solid-js";
+import { Match, Switch, useContext } from "solid-js";
 import { AppContext } from "../data/app";
 import { Icon } from "@iconify-icon/solid";
 
@@ -20,14 +20,14 @@ const TarotCardRoute = () => {
 
     return <div class="flex flex-col items-stretch justify-start min-h-100 gap-4 grow p-4">
         <h2 class="gothic-sub-heading text-2xl text-center">{MajorArcana[id] ?? "No major arcana"}</h2>
-        <hr/>
+        <hr />
         <div class="flex flex-row justify-between items-center">
             <div class="flex flex-col">
                 <h3 class="gothic-sub-heading">Entity</h3>
                 <p>{entity?.name ?? "No entity"}</p>
             </div>
             <div class="bg-orange-800 text-white p-4 rounded-full flex">
-                <Icon icon="material-symbols:target" class="text-2xl" 
+                <Icon icon="material-symbols:target" class="text-2xl"
                     onClick={() => {
                         appContext?.setContextValue({
                             ...appContext.contextValue(),
@@ -44,16 +44,48 @@ const TarotCardRoute = () => {
         </div>
         <hr />
         <div class="flex flex-col gap-2">
-            <div class="flex flex-col gap-2">
-                <h4 class="gothic-sub-heading">Arcana - Face Up</h4>
-                <p>{arcana?.rule_face_up ?? "No effect"}</p>
+            <div class="flex flex-row justify-between items-center gap-4">
+                <div class="flex flex-col gap-2">
+                    <h4 class="gothic-sub-heading">Arcana - Face Up</h4>
+                    <p>{arcana?.rule_face_up ?? "No effect"}</p>
+                </div>
+                <Switch>
+                    <Match when={arcana?.rule_face_up}>
+                        <div class="bg-orange-800 text-white p-4 rounded-full flex">
+                            <Icon icon="material-symbols:keep" class="text-2xl"
+                                onClick={() => {
+                                    appContext?.setContextValue({
+                                        ...appContext.contextValue(),
+                                        activeEntity: associatedKey
+                                    });
+                                }}
+                            />
+                        </div>
+                    </Match>
+                </Switch>
             </div>
-            <div class="flex flex-col gap-2">
-                <h4 class="gothic-sub-heading">Arcana - Face Down</h4>
-                <p>{arcana?.rule_face_down ?? "No effect"}</p>
+            <div class="flex flex-row justify-between items-center gap-4">
+                <div class="flex flex-col gap-2">
+                    <h4 class="gothic-sub-heading">Arcana - Face Down</h4>
+                    <p>{arcana?.rule_face_down ?? "No effect"}</p>
+                </div>
+                <Switch>
+                    <Match when={arcana?.rule_face_down}>
+                        <div class="bg-orange-800 text-white p-4 rounded-full flex">
+                            <Icon icon="material-symbols:keep" class="text-2xl"
+                                onClick={() => {
+                                    appContext?.setContextValue({
+                                        ...appContext.contextValue(),
+                                        activeEntity: associatedKey
+                                    });
+                                }}
+                            />
+                        </div>
+                    </Match>
+                </Switch>
             </div>
         </div>
-        <hr/>
+        <hr />
     </div>
 }
 
