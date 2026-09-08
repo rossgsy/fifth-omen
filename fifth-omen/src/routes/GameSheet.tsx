@@ -1,5 +1,5 @@
 import { For, Show, createMemo, createSignal, useContext } from "solid-js";
-import { Button, Divider, Page, Panel, SectionHeading } from "../components/ui";
+import { Button, Page, Panel, SectionHeading } from "../components/ui";
 import { AppContext } from "../data/app";
 import {
     Folio1,
@@ -104,7 +104,7 @@ const EntityReferenceList = (props: {
 
 const GameSheetRoute = () => {
     const appContext = useContext(AppContext);
-    const [drawWorkflowOpen, setDrawWorkflowOpen] = createSignal(true);
+    const [pendingCard, setPendingCard] = createSignal<number | null>(null);
 
     const updateGameSheetValue = (value: Partial<{
         entityPresence: number;
@@ -133,9 +133,11 @@ const GameSheetRoute = () => {
     ));
 
     const drawnCards = createMemo(() => appContext?.contextValue().drawnTarotCards ?? [null, null, null, null, null]);
-    const currentPhase = createMemo(() => clamp(appContext?.contextValue().currentPhase ?? 0, DRAW_STEPS.length - 1));
-    const currentStep = createMemo(() => DRAW_STEPS[currentPhase()]);
-    const currentCard = createMemo(() => drawnCards()[currentPhase()] ?? null);
+    const currentPhase = createMemo(() => Math.min(appContext?.contextValue().currentPhase ?? 0, DRAW_STEPS.length));
+    const isComplete = createMemo(() => currentPhase() >= DRAW_STEPS.length);
+    const currentStep = createMemo(() => DRAW_STEPS[clamp(currentPhase(), DRAW_STEPS.length - 1)]);
+    const currentCard = createMemo(() => isComplete() ? null : drawnCards()[currentPhase()] ?? null);
+    const isDrawPhase = createMemo(() => !isComplete() && currentCard() === null);
 
     const entityForCard = (tarotNumber: number | null) => {
         if (tarotNumber === null) return null;
@@ -167,40 +169,30 @@ const GameSheetRoute = () => {
         }).filter((arcana): arcana is NonNullable<typeof arcana> => arcana !== null)
     ));
 
-    const setCurrentPhase = (phase: number) => {
-        const tarotNumber = drawnCards()[phase] ?? null;
-        const step = DRAW_STEPS[phase];
+    const commitPendingCard = () => {
+        if (pendingCard() === null || isComplete()) return;
+
+        const tarotNumber = pendingCard()!;
+        const phase = currentPhase();
+        const nextDrawnCards = [...drawnCards()];
+        nextDrawnCards[phase] = tarotNumber;
 
         updateGameSheetValue({
-            currentPhase: phase,
-            activeEntityCard: step.kind === "Entity" ? tarotNumber : appContext?.contextValue().activeEntityCard ?? null,
-            activeEntity: step.kind === "Entity" && tarotNumber !== null ? lookup_entity_key_for_card(tarotNumber) : appContext?.contextValue().activeEntity ?? null,
-        });
-    };
-
-    const setDrawnCard = (index: number, tarotNumber: number | null) => {
-        const nextDrawnCards = [...drawnCards()];
-        nextDrawnCards[index] = tarotNumber;
-
-        const nextValue = {
             drawnTarotCards: nextDrawnCards,
             activeArcanaCards: [nextDrawnCards[1], nextDrawnCards[3]],
-        };
+            activeEntityCard: currentStep().kind === "Entity" ? tarotNumber : appContext?.contextValue().activeEntityCard ?? null,
+            activeEntity: currentStep().kind === "Entity" ? lookup_entity_key_for_card(tarotNumber) : appContext?.contextValue().activeEntity ?? null,
+            entityPresence: currentStep().kind === "Entity" ? 0 : appContext?.contextValue().entityPresence ?? 0,
+            entityResource: currentStep().kind === "Entity" ? 0 : appContext?.contextValue().entityResource ?? 0,
+        });
+        setPendingCard(null);
+    };
 
-        if (index === currentPhase() && DRAW_STEPS[index].kind === "Entity") {
-            updateGameSheetValue({
-                ...nextValue,
-                activeEntityCard: tarotNumber,
-                activeEntity: tarotNumber !== null ? lookup_entity_key_for_card(tarotNumber) : null,
-                entityPresence: 0,
-                entityResource: 0,
-            });
-            if (tarotNumber !== null) setDrawWorkflowOpen(false);
-            return;
-        }
-
-        updateGameSheetValue(nextValue);
-        if (index === currentPhase() && tarotNumber !== null) setDrawWorkflowOpen(false);
+    const completePhase = () => {
+        if (isComplete()) return;
+        updateGameSheetValue({
+            currentPhase: currentPhase() + 1,
+        });
     };
 
     const resetSheet = () => {
@@ -218,6 +210,7 @@ const GameSheetRoute = () => {
             drawnTarotCards: [null, null, null, null, null],
             currentPhase: 0,
         });
+        setPendingCard(null);
     };
 
     const changeDeviceType = () => {
@@ -247,7 +240,7 @@ const GameSheetRoute = () => {
                     <div class="grid gap-3 md:grid-cols-2">
                         <For each={activeArcana()} fallback={
                             <p class="text-center text-zinc-500">
-                                Set the second and fourth cards to reveal active arcana.
+                                The second and fourth cards become active arcana.
                             </p>
                         }>
                             {(arcana) => (
@@ -267,13 +260,7 @@ const GameSheetRoute = () => {
                     </div>
                 </Panel>
 
-                <div class="grid grid-cols-3 gap-2 lg:grid-cols-1">
-                    <Button
-                        class="min-h-12 bg-zinc-800 text-xs uppercase tracking-[0.14em] hover:bg-zinc-700 disabled:hover:bg-zinc-800"
-                        onClick={() => setDrawWorkflowOpen(true)}
-                    >
-                        Edit Draw
-                    </Button>
+                <div class="grid grid-cols-2 gap-2 lg:grid-cols-1">
                     <Button
                         class="min-h-12 bg-red-900 text-xs uppercase tracking-[0.14em] hover:bg-red-800 disabled:hover:bg-red-900"
                         onClick={resetSheet}
@@ -289,152 +276,142 @@ const GameSheetRoute = () => {
                 </div>
             </div>
 
-            <Show when={drawWorkflowOpen() || currentCard() === null}>
-                <Panel as="section" class="grid gap-3 p-3">
-                    <SectionHeading
-                        eyebrow="Draw"
-                        title="Five Cards"
-                        subtitle="Entity / Encounter / Entity / Encounter / Entity"
-                        titleClass="text-2xl tracking-wide"
-                    />
+            <Show when={isDrawPhase()}>
+                <Panel as="section" class="grid min-h-[28rem] place-items-center p-6">
+                    <div class="grid w-full max-w-5xl gap-6">
+                        <SectionHeading
+                            eyebrow={currentStep().kind}
+                            title={`Draw ${currentStep().title}`}
+                            subtitle="Choose the physical tarot card drawn, then lock it in."
+                            titleClass="text-4xl tracking-wide"
+                        />
 
-                    <div class="grid gap-2 md:grid-cols-5">
-                        <For each={DRAW_STEPS}>
-                            {(step, index) => (
-                                <div class={index() === currentPhase()
-                                    ? "grid gap-2 border border-zinc-500 bg-zinc-900 p-2"
-                                    : "grid gap-2 border border-zinc-800 bg-zinc-950/70 p-2"}
-                                >
-                                    <button
-                                        type="button"
-                                        onClick={() => setCurrentPhase(index())}
-                                        class="min-h-16 text-left"
+                        <div class="grid gap-3 md:grid-cols-5">
+                            <For each={DRAW_STEPS}>
+                                {(step, index) => (
+                                    <div class={index() === currentPhase()
+                                        ? "border border-zinc-400 bg-zinc-900 p-3 text-center"
+                                        : "border border-zinc-800 bg-zinc-950/70 p-3 text-center opacity-50"}
                                     >
-                                        <span class="block text-xs uppercase tracking-[0.18em] text-zinc-600">
+                                        <p class="text-xs uppercase tracking-[0.18em] text-zinc-600">
                                             {step.title}
-                                        </span>
-                                        <span class="block text-sm text-zinc-300">
+                                        </p>
+                                        <p class="mt-1 text-sm text-zinc-400">
                                             {step.kind}
-                                        </span>
-                                        <span class="mt-2 block gothic-sub-heading text-lg text-zinc-100">
+                                        </p>
+                                        <p class="mt-3 gothic-sub-heading text-xl text-zinc-100">
                                             {drawnCards()[index()] !== null ? number_to_numeral(drawnCards()[index()]!) : "-"}
-                                        </span>
-                                    </button>
+                                        </p>
+                                    </div>
+                                )}
+                            </For>
+                        </div>
 
-                                    <select
-                                        value={drawnCards()[index()] ?? ""}
-                                        onChange={(event) => {
-                                            const value = event.currentTarget.value;
-                                            setDrawnCard(index(), value === "" ? null : Number(value));
-                                        }}
-                                        class="min-h-11 min-w-0 border border-zinc-700 bg-zinc-950 px-2 text-sm text-zinc-100 outline-none focus:border-zinc-300"
-                                    >
-                                        <option value="">No card</option>
-                                        <For each={cardOptions()}>
-                                            {(option) => (
-                                                <option value={option.tarotNumber}>
-                                                    {option.numeral} - {option.cardName}
-                                                </option>
-                                            )}
-                                        </For>
-                                    </select>
-                                </div>
-                            )}
-                        </For>
+                        <select
+                            value=""
+                            onChange={(event) => {
+                                const value = event.currentTarget.value;
+                                if (value !== "") setPendingCard(Number(value));
+                                event.currentTarget.value = "";
+                            }}
+                            class="mx-auto min-h-14 w-full max-w-xl border border-zinc-700 bg-zinc-950 px-4 text-xl text-zinc-100 outline-none focus:border-zinc-300"
+                        >
+                            <option value="">Select drawn card</option>
+                            <For each={cardOptions()}>
+                                {(option) => (
+                                    <option value={option.tarotNumber}>
+                                        {option.numeral} - {option.cardName}
+                                    </option>
+                                )}
+                            </For>
+                        </select>
                     </div>
                 </Panel>
             </Show>
 
-            <div class="flex min-h-0 flex-col gap-3">
-                <Panel as="section" class="p-3">
-                    <SectionHeading
-                        eyebrow={currentStep().kind}
-                        title={currentCard() !== null ? `${number_to_numeral(currentCard()!)} - ${MajorArcana[currentCard()!]}` : currentStep().title}
-                        subtitle={currentCard() === null ? "Set this physical card in the draw workflow." : undefined}
-                        titleClass="text-2xl tracking-wide"
-                    />
-                </Panel>
+            <Show when={!isDrawPhase() && !isComplete()}>
+                <div class="flex min-h-0 flex-col gap-3">
+                    <Panel as="section" class="p-3">
+                        <SectionHeading
+                            eyebrow={currentStep().kind}
+                            title={`${number_to_numeral(currentCard()!)} - ${MajorArcana[currentCard()!]}`}
+                            subtitle={currentStep().title}
+                            titleClass="text-2xl tracking-wide"
+                        />
+                    </Panel>
 
-                <Show when={currentStep().kind === "Entity"}>
-                    <Show
-                        when={currentEntity()}
-                        fallback={
-                            <Panel as="section" class="p-6 text-center text-zinc-500">
-                                No entity card selected for this phase.
-                            </Panel>
-                        }
-                    >
-                        {(entity) => (
-                            <>
-                                <Panel as="section" class="flex flex-col gap-3 p-3">
-                                    <SectionHeading
-                                        eyebrow="Entity"
-                                        title={entity().name}
-                                        subtitle={entity().quote ? `"${entity().quote}"` : undefined}
-                                        titleClass="text-2xl tracking-wide"
-                                    />
-
-                                    <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                                        <Panel class="p-3">
-                                            <StepperTracker
-                                                label="Presence"
-                                                value={appContext?.contextValue().entityPresence ?? 0}
-                                                max={20}
-                                                onChange={(entityPresence) => updateGameSheetValue({ entityPresence })}
-                                            />
-                                            <div class="mt-3 border-t border-zinc-800 pt-3 text-center">
-                                                <p class="text-xs uppercase tracking-[0.18em] text-zinc-600">
-                                                    Starting Value
-                                                </p>
-                                                <p class="mt-2 text-sm leading-relaxed text-zinc-300">
-                                                    {entity().presenceRule}
-                                                </p>
-                                            </div>
-                                        </Panel>
-
-                                        <Show when={entity().uniqueResource}>
-                                            {(uniqueResource) => (
-                                                <Panel class="p-3">
-                                                    <StepperTracker
-                                                        label={uniqueResource()}
-                                                        value={appContext?.contextValue().entityResource ?? 0}
-                                                        max={20}
-                                                        onChange={(entityResource) => updateGameSheetValue({ entityResource })}
-                                                    />
-                                                </Panel>
-                                            )}
-                                        </Show>
-                                    </div>
-
-                                    <RuleCard label="Doom Rule">
-                                        {entity().doom_rule}
-                                    </RuleCard>
+                    <Show when={currentStep().kind === "Entity"}>
+                        <Show
+                            when={currentEntity()}
+                            fallback={
+                                <Panel as="section" class="p-6 text-center text-zinc-500">
+                                    No entity is mapped to this card.
                                 </Panel>
+                            }
+                        >
+                            {(entity) => (
+                                <>
+                                    <Panel as="section" class="flex flex-col gap-3 p-3">
+                                        <SectionHeading
+                                            eyebrow="Entity"
+                                            title={entity().name}
+                                            subtitle={entity().quote ? `"${entity().quote}"` : undefined}
+                                            titleClass="text-2xl tracking-wide"
+                                        />
 
-                                <div class="grid gap-3 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.6fr)]">
-                                    <EntityReferenceList
-                                        title="Modifiers"
-                                        items={entity().first_draft_actions}
-                                    />
-                                    <EntityReferenceList
-                                        title="Moves"
-                                        items={entity().second_draft_actions}
-                                    />
-                                </div>
-                            </>
-                        )}
+                                        <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                                            <Panel class="p-3">
+                                                <StepperTracker
+                                                    label="Presence"
+                                                    value={appContext?.contextValue().entityPresence ?? 0}
+                                                    max={20}
+                                                    onChange={(entityPresence) => updateGameSheetValue({ entityPresence })}
+                                                />
+                                                <div class="mt-3 border-t border-zinc-800 pt-3 text-center">
+                                                    <p class="text-xs uppercase tracking-[0.18em] text-zinc-600">
+                                                        Starting Value
+                                                    </p>
+                                                    <p class="mt-2 text-sm leading-relaxed text-zinc-300">
+                                                        {entity().presenceRule}
+                                                    </p>
+                                                </div>
+                                            </Panel>
+
+                                            <Show when={entity().uniqueResource}>
+                                                {(uniqueResource) => (
+                                                    <Panel class="p-3">
+                                                        <StepperTracker
+                                                            label={uniqueResource()}
+                                                            value={appContext?.contextValue().entityResource ?? 0}
+                                                            max={20}
+                                                            onChange={(entityResource) => updateGameSheetValue({ entityResource })}
+                                                        />
+                                                    </Panel>
+                                                )}
+                                            </Show>
+                                        </div>
+
+                                        <RuleCard label="Doom Rule">
+                                            {entity().doom_rule}
+                                        </RuleCard>
+                                    </Panel>
+
+                                    <div class="grid gap-3 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.6fr)]">
+                                        <EntityReferenceList
+                                            title="Modifiers"
+                                            items={entity().first_draft_actions}
+                                        />
+                                        <EntityReferenceList
+                                            title="Moves"
+                                            items={entity().second_draft_actions}
+                                        />
+                                    </div>
+                                </>
+                            )}
+                        </Show>
                     </Show>
-                </Show>
 
-                <Show when={currentStep().kind === "Encounter"}>
-                    <Show
-                        when={currentCard() !== null}
-                        fallback={
-                            <Panel as="section" class="p-6 text-center text-zinc-500">
-                                No encounter card selected for this phase.
-                            </Panel>
-                        }
-                    >
+                    <Show when={currentStep().kind === "Encounter"}>
                         <Panel as="section" class="grid gap-3 p-3">
                             <RuleCard label={`Encounter - ${currentEncounter()?.name ?? "Unknown Encounter"}`}>
                                 {currentEncounter()?.rule}
@@ -444,8 +421,54 @@ const GameSheetRoute = () => {
                             </RuleCard>
                         </Panel>
                     </Show>
-                </Show>
-            </div>
+
+                    <Button
+                        class="min-h-14 bg-zinc-100 text-lg uppercase tracking-[0.16em] text-zinc-950 hover:bg-zinc-300 disabled:hover:bg-zinc-100"
+                        onClick={completePhase}
+                    >
+                        Complete {currentStep().kind}
+                    </Button>
+                </div>
+            </Show>
+
+            <Show when={isComplete()}>
+                <Panel as="section" class="grid min-h-[24rem] place-items-center p-6 text-center">
+                    <SectionHeading
+                        eyebrow="Complete"
+                        title="The Omen Is Set"
+                        subtitle="Reset the sheet to begin another five-card draw."
+                        titleClass="text-4xl tracking-wide"
+                    />
+                </Panel>
+            </Show>
+
+            <Show when={pendingCard() !== null}>
+                <div class="fixed inset-0 z-50 grid place-items-center bg-black/80 p-6 backdrop-blur-sm">
+                    <Panel class="w-full max-w-md p-6 text-center shadow-2xl">
+                        <SectionHeading
+                            eyebrow={currentStep().kind}
+                            title={`${number_to_numeral(pendingCard()!)} - ${MajorArcana[pendingCard()!]}`}
+                            subtitle={`Confirm this as ${currentStep().title}. This cannot be changed later.`}
+                            titleClass="text-2xl tracking-wide"
+                        />
+
+                        <div class="mt-6 grid grid-cols-2 gap-3">
+                            <Button
+                                class="min-h-12 bg-zinc-800 uppercase tracking-[0.14em] hover:bg-zinc-700"
+                                onClick={() => setPendingCard(null)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                class="min-h-12 bg-zinc-100 uppercase tracking-[0.14em] text-zinc-950 hover:bg-zinc-300"
+                                onClick={commitPendingCard}
+                            >
+                                Confirm
+                            </Button>
+                        </div>
+                    </Panel>
+                </div>
+            </Show>
         </Page>
     );
 };

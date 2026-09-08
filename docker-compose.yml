@@ -1,0 +1,17 @@
+networks:
+  traefik:
+    external: true
+
+services:
+  recorder-frontend:
+    image: "rossgsy/fifth-omen-app:local"
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
+      - "traefik.http.routers.fifth-omen-app.entrypoints=https"
+      - "traefik.http.routers.fifth-omen-app.rule=Host(`fifth-omen.lab-2.paleglyph.com`)"
+      - "traefik.http.routers.fifth-omen-app.tls=true"
+      - "traefik.http.routers.fifth-omen-app.tls.certresolver=zerossl"
+      - "traefik.http.services.fifth-omen-app.loadbalancer.server.port=80"

@@ -1,4 +1,4 @@
-import { Match, Switch, useContext, type Component } from 'solid-js';
+import { Match, Switch, createSignal, onCleanup, onMount, useContext, type Component } from 'solid-js';
 import AppContextProvider, { AppContext } from './data/app';
 import { Route, Router } from "@solidjs/router";
 import PlaybookRoute from './routes/Playbook';
@@ -9,6 +9,17 @@ import GrimoireEntryRoute from './routes/GrimoireEntry';
 import TarotSlotsRoute from './routes/TarotSlots';
 import GameSheetRoute from './routes/GameSheet';
 import { ActionCard, IconButton } from './components/ui';
+import { Icon } from '@iconify-icon/solid';
+
+type FullscreenDocument = Document & {
+  webkitFullscreenElement?: Element | null;
+  webkitExitFullscreen?: () => Promise<void> | void;
+};
+
+type FullscreenElement = HTMLElement & {
+  webkitRequestFullscreen?: () => Promise<void> | void;
+  webkitRequestFullScreen?: () => Promise<void> | void;
+};
 
 const DeviceMenu: Component = () => {
   const appContext = useContext(AppContext);
@@ -62,12 +73,83 @@ const NavBar = () => {
   </Switch>
 }
 
+const FullscreenButton: Component = () => {
+  const [isFullscreen, setIsFullscreen] = createSignal(false);
+
+  const fullscreenElement = () => {
+    const fullscreenDocument = document as FullscreenDocument;
+    return document.fullscreenElement ?? fullscreenDocument.webkitFullscreenElement ?? null;
+  };
+
+  const updateFullscreenState = () => {
+    setIsFullscreen(fullscreenElement() !== null);
+  };
+
+  onMount(() => {
+    updateFullscreenState();
+    document.addEventListener("fullscreenchange", updateFullscreenState);
+    document.addEventListener("webkitfullscreenchange", updateFullscreenState);
+  });
+
+  onCleanup(() => {
+    document.removeEventListener("fullscreenchange", updateFullscreenState);
+    document.removeEventListener("webkitfullscreenchange", updateFullscreenState);
+  });
+
+  const toggleFullscreen = async () => {
+    const fullscreenDocument = document as FullscreenDocument;
+
+    try {
+      if (fullscreenElement()) {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+          return;
+        }
+        await fullscreenDocument.webkitExitFullscreen?.();
+        return;
+      }
+
+      const target = document.documentElement as FullscreenElement;
+      if (target.requestFullscreen) {
+        await target.requestFullscreen();
+        return;
+      }
+      if (target.webkitRequestFullscreen) {
+        await target.webkitRequestFullscreen();
+        return;
+      }
+      if (target.webkitRequestFullScreen) {
+        await target.webkitRequestFullScreen();
+        return;
+      }
+
+      window.alert("Fullscreen is not available in this browser.");
+    } catch (error) {
+      console.warn("Fullscreen request failed", error);
+      window.alert("Fullscreen could not be started from this browser.");
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      aria-label={isFullscreen() ? "Exit fullscreen" : "Enter fullscreen"}
+      title={isFullscreen() ? "Exit fullscreen" : "Enter fullscreen"}
+      onClick={toggleFullscreen}
+      class="absolute right-3 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded bg-zinc-800 text-3xl text-white transition-colors hover:bg-zinc-700"
+    >
+      <Icon icon={isFullscreen() ? "mdi:fullscreen-exit" : "mdi:fullscreen"} />
+    </button>
+  );
+};
+
 const App: Component = () => {
   return (
-    <div class="flex justify-between items-stretch h-screen flex-col bg-zinc-900">
+    <div class="flex h-screen flex-col items-stretch justify-between bg-zinc-900">
       <AppContextProvider>
-        <div class="p-4 border-b-1 border-b-white">
+        <div class="relative border-b-1 border-b-white p-4 pr-20">
           <a href="/" class="block gothic-heading text-6xl text-center text-white">Fifth Omen</a>
+          <FullscreenButton />
         </div>
         <div class="text-white grow flex overflow-auto items-stretch flex-col">
           <AppInner />
