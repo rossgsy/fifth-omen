@@ -239,42 +239,58 @@
       "rule_face_up": "After the first draft pass each round, reroll the remaining dice.",
       "rule_face_down": "",
       "tarot_cards": [
-        0
+        0,5
       ]
     },
     "1": {
       "rule_face_up": "Once per round, one player may treat one drafted die as ±1 for their action only.",
       "rule_face_down": "",
       "tarot_cards": [
-        1
+        1,6
       ]
     },
     "2": {
       "rule_face_up": "Two-die actions deal +1 Damage.",
       "rule_face_down": "",
       "tarot_cards": [
-        8
+        8, 12
       ]
     },
     "3": {
       "rule_face_up": "During even numbered rounds, players cannot generate Ward.",
       "rule_face_down": "",
       "tarot_cards": [
-        9
+        9,2
       ]
     },
     "4": {
       "rule_face_up": "After the first draft pass each round, the First Player must select and reroll one undrafted die.",
       "rule_face_down": "",
       "tarot_cards": [
-        10
+        10,7,14
       ]
     },
     "5": {
       "rule_face_up": "At the end of each round, if no player took Damage, add 1 Doom.",
       "rule_face_down": "",
       "tarot_cards": [
-        16
+        16,3
+      ]
+    },
+    "6": {
+      "is_stricture": true,
+      "rule_face_up": "Players must not speak the numbers 1-6 during the drafting phase.",
+      "rule_face_down": "Players must not speak the numbers 1-6 during the drafting phase.",
+      "tarot_cards": [
+        21,13,16
+      ]
+    },
+    "7": {
+      "is_stricture": true,
+      "rule_face_up": "The table must fall silent if there are sixes remaining in the draft.",
+      "rule_face_down": "The table must fall silent if there are doubles remaining in the draft.",
+      "tarot_cards": [
+        4,11,9
       ]
     }
   },

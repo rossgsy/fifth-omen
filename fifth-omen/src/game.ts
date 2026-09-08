@@ -79,6 +79,7 @@ export interface Encounter {
 }
 
 export interface Arcana {
+    is_stricture?: boolean;
     rule_face_up: string;
     rule_face_down: string;
     tarot_cards: number[];
