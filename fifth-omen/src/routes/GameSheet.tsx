@@ -1,4 +1,4 @@
-import { For, Show, createMemo, useContext } from "solid-js";
+import { For, Show, createMemo, createSignal, useContext } from "solid-js";
 import { Button, Divider, Page, Panel, SectionHeading } from "../components/ui";
 import { AppContext } from "../data/app";
 import {
@@ -104,6 +104,7 @@ const EntityReferenceList = (props: {
 
 const GameSheetRoute = () => {
     const appContext = useContext(AppContext);
+    const [drawWorkflowOpen, setDrawWorkflowOpen] = createSignal(true);
 
     const updateGameSheetValue = (value: Partial<{
         entityPresence: number;
@@ -194,10 +195,12 @@ const GameSheetRoute = () => {
                 entityPresence: 0,
                 entityResource: 0,
             });
+            if (tarotNumber !== null) setDrawWorkflowOpen(false);
             return;
         }
 
         updateGameSheetValue(nextValue);
+        if (index === currentPhase() && tarotNumber !== null) setDrawWorkflowOpen(false);
     };
 
     const resetSheet = () => {
@@ -225,9 +228,69 @@ const GameSheetRoute = () => {
     };
 
     return (
-        <Page class="gap-3 p-3 lg:grid lg:grid-cols-[18rem_minmax(0,1fr)] lg:items-start">
-            <div class="flex flex-col gap-3">
-                <Panel as="section" class="flex flex-col gap-3 p-3">
+        <Page class="gap-3 p-3">
+            <div class="grid gap-3 lg:grid-cols-[18rem_minmax(0,1fr)_auto] lg:items-stretch">
+                <Panel class="p-3">
+                    <StepperTracker
+                        label="Global Doom"
+                        value={appContext?.contextValue().globalDoom ?? 0}
+                        max={10}
+                        onChange={(globalDoom) => updateGameSheetValue({ globalDoom })}
+                    />
+                </Panel>
+
+                <Panel as="section" class="border-zinc-800 bg-zinc-950/60 p-3">
+                    <p class="mb-3 text-center text-xs uppercase tracking-[0.18em] text-zinc-600">
+                        Active Arcana
+                    </p>
+
+                    <div class="grid gap-3 md:grid-cols-2">
+                        <For each={activeArcana()} fallback={
+                            <p class="text-center text-zinc-500">
+                                Set the second and fourth cards to reveal active arcana.
+                            </p>
+                        }>
+                            {(arcana) => (
+                                <div class="border border-zinc-800 bg-zinc-950 p-3">
+                                    <p class="text-xs uppercase tracking-[0.18em] text-zinc-600">
+                                        {arcana.slotTitle} / {arcana.numeral}
+                                    </p>
+                                    <h3 class="mt-2 gothic-sub-heading text-lg text-zinc-100">
+                                        {arcana.cardName}
+                                    </h3>
+                                    <p class="mt-2 text-sm leading-relaxed text-zinc-400">
+                                        {arcana.rule}
+                                    </p>
+                                </div>
+                            )}
+                        </For>
+                    </div>
+                </Panel>
+
+                <div class="grid grid-cols-3 gap-2 lg:grid-cols-1">
+                    <Button
+                        class="min-h-12 bg-zinc-800 text-xs uppercase tracking-[0.14em] hover:bg-zinc-700 disabled:hover:bg-zinc-800"
+                        onClick={() => setDrawWorkflowOpen(true)}
+                    >
+                        Edit Draw
+                    </Button>
+                    <Button
+                        class="min-h-12 bg-red-900 text-xs uppercase tracking-[0.14em] hover:bg-red-800 disabled:hover:bg-red-900"
+                        onClick={resetSheet}
+                    >
+                        Reset
+                    </Button>
+                    <Button
+                        class="min-h-12 bg-zinc-800 text-xs uppercase tracking-[0.14em] hover:bg-zinc-700 disabled:hover:bg-zinc-800"
+                        onClick={changeDeviceType}
+                    >
+                        Device
+                    </Button>
+                </div>
+            </div>
+
+            <Show when={drawWorkflowOpen() || currentCard() === null}>
+                <Panel as="section" class="grid gap-3 p-3">
                     <SectionHeading
                         eyebrow="Draw"
                         title="Five Cards"
@@ -235,27 +298,26 @@ const GameSheetRoute = () => {
                         titleClass="text-2xl tracking-wide"
                     />
 
-                    <Divider />
-
-                    <div class="grid gap-2">
+                    <div class="grid gap-2 md:grid-cols-5">
                         <For each={DRAW_STEPS}>
                             {(step, index) => (
-                                <div class="grid gap-2 border border-zinc-800 bg-zinc-950/70 p-2">
+                                <div class={index() === currentPhase()
+                                    ? "grid gap-2 border border-zinc-500 bg-zinc-900 p-2"
+                                    : "grid gap-2 border border-zinc-800 bg-zinc-950/70 p-2"}
+                                >
                                     <button
                                         type="button"
                                         onClick={() => setCurrentPhase(index())}
-                                        class="grid min-h-12 grid-cols-[1fr_auto] items-center gap-2 text-left"
+                                        class="min-h-16 text-left"
                                     >
-                                        <span>
-                                            <span class="block text-xs uppercase tracking-[0.18em] text-zinc-600">
-                                                {step.title}
-                                            </span>
-                                            <span class="text-sm text-zinc-300">
-                                                {step.kind}
-                                            </span>
+                                        <span class="block text-xs uppercase tracking-[0.18em] text-zinc-600">
+                                            {step.title}
                                         </span>
-                                        <span class={index() === currentPhase() ? "text-sm text-zinc-100" : "text-sm text-zinc-600"}>
-                                            {index() === currentPhase() ? "Current" : "View"}
+                                        <span class="block text-sm text-zinc-300">
+                                            {step.kind}
+                                        </span>
+                                        <span class="mt-2 block gothic-sub-heading text-lg text-zinc-100">
+                                            {drawnCards()[index()] !== null ? number_to_numeral(drawnCards()[index()]!) : "-"}
                                         </span>
                                     </button>
 
@@ -265,7 +327,7 @@ const GameSheetRoute = () => {
                                             const value = event.currentTarget.value;
                                             setDrawnCard(index(), value === "" ? null : Number(value));
                                         }}
-                                        class="min-h-11 border border-zinc-700 bg-zinc-950 px-2 text-sm text-zinc-100 outline-none focus:border-zinc-300"
+                                        class="min-h-11 min-w-0 border border-zinc-700 bg-zinc-950 px-2 text-sm text-zinc-100 outline-none focus:border-zinc-300"
                                     >
                                         <option value="">No card</option>
                                         <For each={cardOptions()}>
@@ -281,31 +343,7 @@ const GameSheetRoute = () => {
                         </For>
                     </div>
                 </Panel>
-
-                <Panel class="p-3">
-                    <StepperTracker
-                        label="Global Doom"
-                        value={appContext?.contextValue().globalDoom ?? 0}
-                        max={10}
-                        onChange={(globalDoom) => updateGameSheetValue({ globalDoom })}
-                    />
-                </Panel>
-
-                <div class="grid gap-2">
-                    <Button
-                        class="min-h-12 bg-red-900 text-sm uppercase tracking-[0.16em] hover:bg-red-800 disabled:hover:bg-red-900"
-                        onClick={resetSheet}
-                    >
-                        Reset Sheet
-                    </Button>
-                    <Button
-                        class="min-h-12 bg-zinc-800 text-sm uppercase tracking-[0.16em] hover:bg-zinc-700 disabled:hover:bg-zinc-800"
-                        onClick={changeDeviceType}
-                    >
-                        Change Device Type
-                    </Button>
-                </div>
-            </div>
+            </Show>
 
             <div class="flex min-h-0 flex-col gap-3">
                 <Panel as="section" class="p-3">
@@ -407,34 +445,6 @@ const GameSheetRoute = () => {
                         </Panel>
                     </Show>
                 </Show>
-
-                <Panel as="section" class="border-zinc-800 bg-zinc-950/60 p-3">
-                    <p class="mb-3 text-center text-xs uppercase tracking-[0.18em] text-zinc-600">
-                        Active Arcana
-                    </p>
-
-                    <div class="grid gap-3 md:grid-cols-2">
-                        <For each={activeArcana()} fallback={
-                            <p class="text-center text-zinc-500">
-                                Set the second and fourth cards to reveal active arcana.
-                            </p>
-                        }>
-                            {(arcana) => (
-                                <div class="border border-zinc-800 bg-zinc-950 p-3">
-                                    <p class="text-xs uppercase tracking-[0.18em] text-zinc-600">
-                                        {arcana.slotTitle} / {arcana.numeral}
-                                    </p>
-                                    <h3 class="mt-2 gothic-sub-heading text-lg text-zinc-100">
-                                        {arcana.cardName}
-                                    </h3>
-                                    <p class="mt-2 text-sm leading-relaxed text-zinc-400">
-                                        {arcana.rule}
-                                    </p>
-                                </div>
-                            )}
-                        </For>
-                    </div>
-                </Panel>
             </div>
         </Page>
     );
