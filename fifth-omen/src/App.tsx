@@ -3,7 +3,7 @@ import AppContextProvider, { AppContext } from './data/app';
 import { Route, Router } from "@solidjs/router";
 import PlaybookRoute from './routes/Playbook';
 import GameSheetRoute from './routes/GameSheet';
-import { ActionCard, Button } from './components/ui';
+import { ActionCard, Button, ConfirmDialog } from './components/ui';
 import { Icon } from '@iconify-icon/solid';
 import QRCode from 'qrcode';
 
@@ -195,14 +195,13 @@ const QrShareButton: Component = () => {
 
 const HeaderControls: Component = () => {
   const appContext = useContext(AppContext);
+  const [pendingAction, setPendingAction] = createSignal<"reset" | "device" | null>(null);
   const deviceMode = () => appContext?.contextValue().deviceMode;
 
   const resetDevice = () => {
     if (!appContext) return;
 
     if (deviceMode() === "player") {
-      if (!window.confirm("Reset this player sheet? The selected playbook and health will be cleared.")) return;
-
       appContext.setContextValue({
         ...appContext.contextValue(),
         selectedPlaybook: null,
@@ -213,8 +212,6 @@ const HeaderControls: Component = () => {
     }
 
     if (deviceMode() === "gamesheet") {
-      if (!window.confirm("Reset the game sheet? Drawn cards, Presence, resources, doom, and active arcana will be cleared.")) return;
-
       appContext.setContextValue({
         ...appContext.contextValue(),
         entityPresence: 0,
@@ -231,30 +228,66 @@ const HeaderControls: Component = () => {
 
   const changeDeviceType = () => {
     if (!appContext) return;
-    if (!window.confirm("Return to device selection? Current sheet values will be kept.")) return;
 
     appContext.setDeviceMode(null);
   };
 
+  const confirmPendingAction = () => {
+    if (pendingAction() === "reset") resetDevice();
+    if (pendingAction() === "device") changeDeviceType();
+    setPendingAction(null);
+  };
+
+  const resetMessage = () => (
+    deviceMode() === "player"
+      ? "The selected playbook, health, and progression choices will be cleared."
+      : "Drawn cards, Presence, resources, Doom, and active arcana will be cleared."
+  );
+
   return (
-    <Switch>
-      <Match when={deviceMode() !== null}>
-        <div class="flex gap-2">
-          <Button
-            class="min-h-10 bg-red-900 px-3 text-xs uppercase tracking-[0.14em] hover:bg-red-800 disabled:hover:bg-red-900"
-            onClick={resetDevice}
-          >
-            Reset
-          </Button>
-          <Button
-            class="min-h-10 bg-zinc-800 px-3 text-xs uppercase tracking-[0.14em] hover:bg-zinc-700 disabled:hover:bg-zinc-800"
-            onClick={changeDeviceType}
-          >
-            Device
-          </Button>
-        </div>
-      </Match>
-    </Switch>
+    <>
+      <Switch>
+        <Match when={deviceMode() !== null}>
+          <div class="flex gap-2">
+            <Button
+              class="min-h-10 bg-red-900 px-3 text-xs uppercase tracking-[0.14em] hover:bg-red-800 disabled:hover:bg-red-900"
+              onClick={() => setPendingAction("reset")}
+            >
+              Reset
+            </Button>
+            <Button
+              class="min-h-10 bg-zinc-800 px-3 text-xs uppercase tracking-[0.14em] hover:bg-zinc-700 disabled:hover:bg-zinc-800"
+              onClick={() => setPendingAction("device")}
+            >
+              Device
+            </Button>
+          </div>
+        </Match>
+      </Switch>
+
+      <Show when={pendingAction() === "reset"}>
+        <ConfirmDialog
+          eyebrow="Reset Sheet"
+          title={deviceMode() === "player" ? "Reset Player Sheet?" : "Reset Game Sheet?"}
+          message={resetMessage()}
+          confirmLabel="Reset"
+          destructive
+          onCancel={() => setPendingAction(null)}
+          onConfirm={confirmPendingAction}
+        />
+      </Show>
+
+      <Show when={pendingAction() === "device"}>
+        <ConfirmDialog
+          eyebrow="Device"
+          title="Return to Device Selection?"
+          message="Current sheet values will be kept."
+          confirmLabel="Continue"
+          onCancel={() => setPendingAction(null)}
+          onConfirm={confirmPendingAction}
+        />
+      </Show>
+    </>
   );
 };
 

@@ -1,7 +1,7 @@
 import { For, Match, Show, Switch, createMemo, createSignal, useContext } from "solid-js";
 import { AppContext } from "../data/app";
 import { Playbook, Action, ProgressionStep } from "../game";
-import { Button, Page, Panel, SectionHeading } from "./ui";
+import { Button, ConfirmDialog, Page, Panel, SectionHeading } from "./ui";
 
 const clamp = (value: number, max: number) => Math.max(0, Math.min(max, value));
 
@@ -138,6 +138,10 @@ export interface PlaybookComponentProps {
 const PlaybookComponent = (props: PlaybookComponentProps) => {
     const appContext = useContext(AppContext);
     const [activeTab, setActiveTab] = createSignal<PlayerSheetTab>("actions");
+    const [pendingProgressionChoice, setPendingProgressionChoice] = createSignal<{
+        tierIndex: number;
+        choice: "left" | "right";
+    } | null>(null);
     const progressionChoices = createMemo(() => appContext?.contextValue().playerProgressionChoices ?? [null, null, null]);
     const currentTierIndex = createMemo(() => {
         const nextOpen = progressionChoices().findIndex(choice => choice === null);
@@ -156,6 +160,25 @@ const PlaybookComponent = (props: PlaybookComponentProps) => {
             playerProgressionChoices: nextChoices,
         });
     };
+
+    const confirmProgressionChoice = () => {
+        const pendingChoice = pendingProgressionChoice();
+        if (!pendingChoice) return;
+
+        setProgressionChoice(pendingChoice.tierIndex, pendingChoice.choice);
+        setPendingProgressionChoice(null);
+    };
+
+    const pendingProgressionStep = createMemo(() => {
+        const pendingChoice = pendingProgressionChoice();
+        return pendingChoice ? props.playbook.progression[pendingChoice.tierIndex] ?? null : null;
+    });
+
+    const pendingProgressionText = createMemo(() => {
+        const pendingChoice = pendingProgressionChoice();
+        const step = pendingProgressionStep();
+        return pendingChoice && step ? step[pendingChoice.choice] : "";
+    });
 
     return <Page class="gap-2 p-2">
         <section class="grid gap-2 border border-zinc-800 p-2 md:grid-cols-[minmax(0,1fr)_14rem] md:items-center">
@@ -248,14 +271,14 @@ const PlaybookComponent = (props: PlaybookComponentProps) => {
                                             side="left"
                                             selected={choice() === "left"}
                                             locked={locked()}
-                                            onSelect={() => setProgressionChoice(index(), "left")}
+                                            onSelect={() => setPendingProgressionChoice({ tierIndex: index(), choice: "left" })}
                                         />
                                         <ProgressionChoice
                                             step={step}
                                             side="right"
                                             selected={choice() === "right"}
                                             locked={locked()}
-                                            onSelect={() => setProgressionChoice(index(), "right")}
+                                            onSelect={() => setPendingProgressionChoice({ tierIndex: index(), choice: "right" })}
                                         />
                                     </section>
                                 );
@@ -265,6 +288,17 @@ const PlaybookComponent = (props: PlaybookComponentProps) => {
                 </Match>
             </Switch>
         </Panel>
+
+        <Show when={pendingProgressionChoice() && pendingProgressionStep()}>
+            <ConfirmDialog
+                eyebrow={`Tier ${pendingProgressionStep()!.tier} Progression`}
+                title={`Choose ${pendingProgressionChoice()!.choice}?`}
+                message={pendingProgressionText()}
+                confirmLabel="Choose"
+                onCancel={() => setPendingProgressionChoice(null)}
+                onConfirm={confirmProgressionChoice}
+            />
+        </Show>
     </Page>;
 };
 

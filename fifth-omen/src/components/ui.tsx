@@ -88,6 +88,47 @@ export const Button = (props: ButtonProps) => (
     </button>
 );
 
+type ConfirmDialogProps = {
+    eyebrow?: JSX.Element;
+    title: JSX.Element;
+    message?: JSX.Element;
+    confirmLabel?: JSX.Element;
+    cancelLabel?: JSX.Element;
+    destructive?: boolean;
+    onCancel: () => void;
+    onConfirm: () => void;
+};
+
+export const ConfirmDialog = (props: ConfirmDialogProps) => (
+    <div class="fixed inset-0 z-50 grid place-items-center bg-black/80 p-6 backdrop-blur-sm">
+        <Panel class="w-full max-w-md p-6 text-center shadow-2xl">
+            <SectionHeading
+                eyebrow={props.eyebrow}
+                title={props.title}
+                subtitle={props.message}
+                titleClass="text-2xl tracking-wide"
+            />
+
+            <div class="mt-6 grid grid-cols-2 gap-3">
+                <Button
+                    class="min-h-12 bg-zinc-800 uppercase tracking-[0.14em] hover:bg-zinc-700"
+                    onClick={props.onCancel}
+                >
+                    {props.cancelLabel ?? "Cancel"}
+                </Button>
+                <Button
+                    class={props.destructive
+                        ? "min-h-12 bg-red-900 uppercase tracking-[0.14em] hover:bg-red-800"
+                        : "min-h-12 bg-zinc-100 uppercase tracking-[0.14em] text-zinc-950 hover:bg-zinc-300"}
+                    onClick={props.onConfirm}
+                >
+                    {props.confirmLabel ?? "Confirm"}
+                </Button>
+            </div>
+        </Panel>
+    </div>
+);
+
 type IconButtonProps = ClassProp & {
     href?: string;
     icon: string;
