@@ -24,45 +24,48 @@ const StepperTracker = (props: {
     label: string;
     value: number;
     max: number;
+    showDots?: boolean;
     onChange: (value: number) => void;
 }) => (
-    <div class="flex flex-col gap-3 text-center">
+    <div class="flex flex-col gap-2 text-center">
         <p class="text-xs uppercase tracking-[0.18em] text-zinc-600">
             {props.label}
         </p>
-        <div class="grid grid-cols-[3rem_4.5rem_3rem] items-center justify-center gap-2">
+        <div class="grid grid-cols-[2.75rem_4rem_2.75rem] items-center justify-center gap-2">
             <Button
-                class="flex h-12 w-12 items-center justify-center p-0 text-3xl leading-none"
+                class="flex h-11 w-11 items-center justify-center p-0 text-3xl leading-none"
                 disabled={props.value <= 0}
                 onClick={() => props.onChange(clamp(props.value - 1, props.max))}
             >
                 -
             </Button>
-            <div class="text-center text-4xl tabular-nums leading-none text-zinc-100">
+            <div class="text-center text-3xl tabular-nums leading-none text-zinc-100">
                 {props.value}
             </div>
             <Button
-                class="flex h-12 w-12 items-center justify-center p-0 text-3xl leading-none"
+                class="flex h-11 w-11 items-center justify-center p-0 text-3xl leading-none"
                 disabled={props.value >= props.max}
                 onClick={() => props.onChange(clamp(props.value + 1, props.max))}
             >
                 +
             </Button>
         </div>
-        <div class="flex min-h-8 flex-wrap justify-center gap-0.5 text-base text-zinc-200">
-            <For each={Array.from({ length: props.max }, (_, index) => index)}>
-                {(index) => (
-                    <button
-                        type="button"
-                        aria-label={`Set ${props.label} to ${index + 1}`}
-                        class={index < props.value ? "h-6 w-6 opacity-100" : "h-6 w-6 opacity-30"}
-                        onClick={() => props.onChange(index + 1 === props.value ? index : index + 1)}
-                    >
-                        {index < props.value ? "●" : "○"}
-                    </button>
-                )}
-            </For>
-        </div>
+        <Show when={props.showDots ?? true}>
+            <div class="flex min-h-8 flex-wrap justify-center gap-0.5 text-base text-zinc-200">
+                <For each={Array.from({ length: props.max }, (_, index) => index)}>
+                    {(index) => (
+                        <button
+                            type="button"
+                            aria-label={`Set ${props.label} to ${index + 1}`}
+                            class={index < props.value ? "h-6 w-6 opacity-100" : "h-6 w-6 opacity-30"}
+                            onClick={() => props.onChange(index + 1 === props.value ? index : index + 1)}
+                        >
+                            {index < props.value ? "●" : "○"}
+                        </button>
+                    )}
+                </For>
+            </div>
+        </Show>
     </div>
 );
 
@@ -101,7 +104,7 @@ const CompactStepperTracker = (props: {
 );
 
 const RuleCard = (props: { label: string; children: string | undefined }) => (
-    <div class="border border-zinc-800 bg-zinc-950/70 p-2">
+    <div class="border-t border-zinc-800 pt-2 first:border-t-0 first:pt-0">
         <p class="text-xs uppercase tracking-[0.18em] text-zinc-600">
             {props.label}
         </p>
@@ -115,7 +118,7 @@ const EntityReferenceList = (props: {
     title: string;
     items: Array<{ diceRule: string; description: string }>;
 }) => (
-    <Panel as="section" class="p-2">
+    <section class="border border-zinc-800 p-2">
         <p class="mb-2 text-center text-xs uppercase tracking-[0.18em] text-zinc-600">
             {props.title}
         </p>
@@ -133,7 +136,7 @@ const EntityReferenceList = (props: {
                 )}
             </For>
         </div>
-    </Panel>
+    </section>
 );
 
 const GameSheetRoute = () => {
@@ -229,56 +232,31 @@ const GameSheetRoute = () => {
         });
     };
 
-    const resetSheet = () => {
-        if (!appContext) return;
-        if (!window.confirm("Reset the game sheet? Drawn cards, Presence, resources, doom, and active arcana will be cleared.")) return;
-
-        appContext.setContextValue({
-            ...appContext.contextValue(),
-            entityPresence: 0,
-            entityResource: 0,
-            globalDoom: 0,
-            activeArcanaCards: [null, null],
-            activeEntityCard: null,
-            activeEntity: null,
-            drawnTarotCards: [null, null, null, null, null],
-            currentPhase: 0,
-        });
-        setPendingCard(null);
-    };
-
-    const changeDeviceType = () => {
-        if (!appContext) return;
-        if (!window.confirm("Return to device selection? Current sheet values will be kept.")) return;
-
-        appContext.setDeviceMode(null);
-    };
-
     return (
         <Page class="gap-2 p-2">
-            <div class="grid gap-2 lg:grid-cols-[15rem_minmax(0,1fr)_auto] lg:items-stretch">
-                <Panel class="p-2">
+            <div class="grid gap-2 md:grid-cols-[14rem_minmax(0,1fr)] md:items-stretch">
+                <section class="border border-zinc-800 p-2">
                     <CompactStepperTracker
                         label="Global Doom"
                         value={appContext?.contextValue().globalDoom ?? 0}
                         max={10}
                         onChange={(globalDoom) => updateGameSheetValue({ globalDoom })}
                     />
-                </Panel>
+                </section>
 
-                <Panel as="section" class="border-zinc-800 bg-zinc-950/60 p-2">
+                <section class="border border-zinc-800 p-2">
                     <p class="mb-2 text-center text-xs uppercase tracking-[0.18em] text-zinc-600">
                         Active Arcana
                     </p>
 
                     <div class="grid gap-2 md:grid-cols-2">
                         <For each={activeArcana()} fallback={
-                            <p class="text-center text-zinc-500">
+                            <p class="self-center text-center text-sm leading-none text-zinc-500">
                                 The second and fourth cards become active arcana.
                             </p>
                         }>
                             {(arcana) => (
-                                <div class="border border-zinc-800 bg-zinc-950 p-2">
+                                <div>
                                     <p class="text-xs uppercase tracking-[0.18em] text-zinc-600">
                                         {arcana.slotTitle} / {arcana.numeral}
                                     </p>
@@ -292,32 +270,17 @@ const GameSheetRoute = () => {
                             )}
                         </For>
                     </div>
-                </Panel>
-
-                <div class="grid grid-cols-2 gap-2 lg:grid-cols-1">
-                    <Button
-                        class="min-h-10 bg-red-900 text-xs uppercase tracking-[0.14em] hover:bg-red-800 disabled:hover:bg-red-900"
-                        onClick={resetSheet}
-                    >
-                        Reset
-                    </Button>
-                    <Button
-                        class="min-h-10 bg-zinc-800 text-xs uppercase tracking-[0.14em] hover:bg-zinc-700 disabled:hover:bg-zinc-800"
-                        onClick={changeDeviceType}
-                    >
-                        Device
-                    </Button>
-                </div>
+                </section>
             </div>
 
             <Show when={isDrawPhase()}>
                 <Panel as="section" class="grid place-items-center p-4">
-                    <div class="grid w-full max-w-5xl gap-4">
+                    <div class="grid w-full max-w-5xl gap-3">
                         <SectionHeading
                             eyebrow={currentStep().kind}
                             title={`Draw ${currentStep().title}`}
                             subtitle="Choose the physical tarot card drawn, then lock it in."
-                            titleClass="text-3xl tracking-wide"
+                            titleClass="text-2xl tracking-wide"
                         />
 
                         <div class="grid gap-2 md:grid-cols-5">
@@ -365,15 +328,6 @@ const GameSheetRoute = () => {
 
             <Show when={!isDrawPhase() && !isComplete()}>
                 <div class="flex min-h-0 flex-col gap-2">
-                    <Panel as="section" class="p-2">
-                        <SectionHeading
-                            eyebrow={currentStep().kind}
-                            title={`${number_to_numeral(currentCard()!)} - ${MajorArcana[currentCard()!]}`}
-                            subtitle={currentStep().title}
-                            titleClass="text-xl tracking-wide"
-                        />
-                    </Panel>
-
                     <Show when={currentStep().kind === "Entity"}>
                         <Show
                             when={currentEntity()}
@@ -385,52 +339,55 @@ const GameSheetRoute = () => {
                         >
                             {(entity) => (
                                 <>
-                                    <Panel as="section" class="flex flex-col gap-2 p-2">
-                                        <SectionHeading
-                                            eyebrow="Entity"
-                                            title={entity().name}
-                                            subtitle={entity().quote ? `"${entity().quote}"` : undefined}
-                                            titleClass="text-xl tracking-wide"
-                                        />
+                                    <section class="grid gap-2 border border-zinc-800 p-2 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)] md:items-start">
+                                        <div>
+                                            <SectionHeading
+                                                eyebrow="Entity"
+                                                title={entity().name}
+                                                subtitle={entity().quote ? `"${entity().quote}"` : undefined}
+                                                titleClass="text-xl tracking-wide"
+                                            />
+                                            <RuleCard label="Doom Rule">
+                                                {entity().doom_rule}
+                                            </RuleCard>
+                                        </div>
 
-                                        <div class="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                                            <Panel class="p-2">
+                                        <div class="grid gap-2">
+                                            <div class="border-l border-zinc-800 pl-2">
                                                 <StepperTracker
                                                     label="Presence"
                                                     value={appContext?.contextValue().entityPresence ?? 0}
                                                     max={20}
+                                                    showDots={false}
                                                     onChange={(entityPresence) => updateGameSheetValue({ entityPresence })}
                                                 />
-                                                <div class="mt-3 border-t border-zinc-800 pt-3 text-center">
+                                                <div class="mt-2 border-t border-zinc-800 pt-2 text-center">
                                                     <p class="text-xs uppercase tracking-[0.18em] text-zinc-600">
                                                         Starting Value
                                                     </p>
-                                                    <p class="mt-2 text-sm leading-relaxed text-zinc-300">
+                                                    <p class="mt-1 text-sm leading-snug text-zinc-300">
                                                         {entity().presenceRule}
                                                     </p>
                                                 </div>
-                                            </Panel>
-
-                                            <Show when={entity().uniqueResource}>
-                                                {(uniqueResource) => (
-                                                    <Panel class="p-2">
-                                                        <StepperTracker
-                                                            label={uniqueResource()}
-                                                            value={appContext?.contextValue().entityResource ?? 0}
-                                                            max={20}
-                                                            onChange={(entityResource) => updateGameSheetValue({ entityResource })}
-                                                        />
-                                                    </Panel>
-                                                )}
-                                            </Show>
+                                            </div>
                                         </div>
 
-                                        <RuleCard label="Doom Rule">
-                                            {entity().doom_rule}
-                                        </RuleCard>
-                                    </Panel>
+                                        <Show when={entity().uniqueResource}>
+                                            {(uniqueResource) => (
+                                                <div class="border-l border-zinc-800 pl-2">
+                                                    <StepperTracker
+                                                        label={uniqueResource()}
+                                                        value={appContext?.contextValue().entityResource ?? 0}
+                                                        max={20}
+                                                        showDots={false}
+                                                        onChange={(entityResource) => updateGameSheetValue({ entityResource })}
+                                                    />
+                                                </div>
+                                            )}
+                                        </Show>
+                                    </section>
 
-                                    <div class="grid gap-2 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.6fr)]">
+                                    <div class="grid gap-2 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.6fr)]">
                                         <EntityReferenceList
                                             title="Modifiers"
                                             items={entity().first_draft_actions}
@@ -446,14 +403,14 @@ const GameSheetRoute = () => {
                     </Show>
 
                     <Show when={currentStep().kind === "Encounter"}>
-                        <Panel as="section" class="grid gap-2 p-2">
+                        <section class="grid gap-2 border border-zinc-800 p-2">
                             <RuleCard label={`Encounter - ${currentEncounter()?.name ?? "Unknown Encounter"}`}>
                                 {currentEncounter()?.rule}
                             </RuleCard>
                             <RuleCard label="Arcana">
                                 {lookup_arcana_for_card(currentCard()!)?.rule_face_up || lookup_arcana_for_card(currentCard()!)?.rule_face_down || "No arcana rule set for this card."}
                             </RuleCard>
-                        </Panel>
+                        </section>
                     </Show>
 
                     <Button
