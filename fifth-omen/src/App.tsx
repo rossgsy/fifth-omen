@@ -6,42 +6,24 @@ import TarotRoute from './routes/Tarot';
 import TarotCardRoute from './routes/TarotCard';
 import HomeRoute from './routes/Home';
 import GrimoireEntryRoute from './routes/GrimoireEntry';
-import { Icon } from '@iconify-icon/solid';
 import TarotSlotsRoute from './routes/TarotSlots';
 import GameSheetRoute from './routes/GameSheet';
+import { ActionCard, IconButton } from './components/ui';
 
 const DeviceMenu: Component = () => {
   const appContext = useContext(AppContext);
 
   return <div class="flex flex-col min-h-100 grow p-4 justify-center gap-3">
-    <div
+    <ActionCard
+      eyebrow="Personal"
+      title="Player Sheet"
       onClick={() => appContext?.setDeviceMode("player")}
-      class="
-      cursor-pointer border border-zinc-700 bg-zinc-950 p-5
-      transition-all hover:border-zinc-500 hover:bg-zinc-900
-    "
-    >
-      <p class="text-xs uppercase tracking-[0.22em] text-zinc-600">
-        Personal
-      </p>
-      <p class="mt-1 text-xl text-zinc-100">
-        Player Sheet
-      </p>
-    </div>
-    <div
+    />
+    <ActionCard
+      eyebrow="Shared"
+      title="Game Sheet"
       onClick={() => appContext?.setDeviceMode("gamesheet")}
-      class="
-      cursor-pointer border border-zinc-700 bg-zinc-950 p-5
-      transition-all hover:border-zinc-500 hover:bg-zinc-900
-    "
-    >
-      <p class="text-xs uppercase tracking-[0.22em] text-zinc-600">
-        Shared
-      </p>
-      <p class="mt-1 text-xl text-zinc-100">
-        Game Sheet
-      </p>
-    </div>
+    />
   </div>
 };
 
@@ -71,18 +53,10 @@ const NavBar = () => {
 
   return <Switch>
     <Match when={appContext?.contextValue().deviceMode === "player"}>
-      <div>
-        <div class="flex flex-row p-4 gap-4 content-end justify-end">
-          <a href="/" class="bg-red-800 text-white p-4 rounded-full flex">
-            <Icon icon="game-icons:character" class="text-4xl" />
-          </a>
-          <a href="/tarot" class="bg-purple-800 text-white p-4 rounded-full flex">
-            <Icon icon="game-icons:poker-hand" class="text-4xl" />
-          </a>
-          <a href="/grimoire" class="bg-teal-800 text-white p-4 rounded-full flex">
-            <Icon icon="game-icons:tentacles-skull" class="text-4xl" />
-          </a>
-        </div>
+      <div class="flex flex-row p-4 gap-4 content-end justify-end">
+        <IconButton href="/" label="Playbook" icon="game-icons:character" tone="red" iconClass="text-4xl" />
+        <IconButton href="/tarot" label="Tarot" icon="game-icons:poker-hand" tone="purple" iconClass="text-4xl" />
+        <IconButton href="/grimoire" label="Grimoire" icon="game-icons:tentacles-skull" tone="teal" iconClass="text-4xl" />
       </div>
     </Match>
   </Switch>

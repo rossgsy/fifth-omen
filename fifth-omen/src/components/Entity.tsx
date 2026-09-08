@@ -1,4 +1,5 @@
 import type { Entity } from "../game";
+import { Divider, SectionHeading } from "./ui";
 
 export interface EntitySheetProps {
     entity: Entity | null
@@ -6,11 +7,11 @@ export interface EntitySheetProps {
 
 const EntitySheet = (props: EntitySheetProps) => {
     return <div class="flex flex-col gap-4">
-        <h2 class="gothic-sub-heading text-2xl text-center">{props.entity?.name}</h2>
+        <SectionHeading title={props.entity?.name} />
         <div class="flex flex-row items-center gap-4 justify-center">
             <strong>PRESENCE</strong> <span>{props.entity?.presenceRule}</span>
         </div>
-        <hr />
+        <Divider />
         <div class="flex flex-col gap-2">
             <h3 class="gothic-sub-heading">FIRST DRAFT</h3>
             {props.entity?.first_draft_actions.map((action, index) => (
@@ -22,7 +23,7 @@ const EntitySheet = (props: EntitySheetProps) => {
                 </div>
             ))}
         </div>
-        <hr />
+        <Divider />
         <div class="flex flex-col gap-2">
             <h3 class="gothic-sub-heading">SECOND DRAFT</h3>
             {props.entity?.second_draft_actions.map((action, index) => (
@@ -34,7 +35,7 @@ const EntitySheet = (props: EntitySheetProps) => {
                 </div>
             ))}
         </div>
-        <hr />
+        <Divider />
         <div class="flex flex-col gap-2">
             <h3 class="gothic-sub-heading">DOOM</h3>
             <p>{props.entity?.doom_rule}</p>

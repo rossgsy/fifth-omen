@@ -3,7 +3,8 @@ import { createMemo, createSignal, Match, Switch } from "solid-js";
 import { useContext } from "solid-js";
 import { AppContext } from "../data/app";
 import { Icon } from "@iconify-icon/solid";
-import { Folio1, lookup_encounter_for_card, lookup_entity_for_card, MajorArcana, numeral_to_number } from "../game";
+import { lookup_encounter_for_card, lookup_entity_for_card, MajorArcana, numeral_to_number } from "../game";
+import { Button, Divider, Page, Panel, SectionHeading } from "../components/ui";
 
 interface CardPickerModalProps {
     isOpen: boolean;
@@ -54,23 +55,18 @@ const CardPickerModal = (props: CardPickerModalProps) => {
       "
                     />
 
-                    <div class="my-5 flex items-center gap-3">
-                        <div class="h-px flex-1 bg-zinc-800" />
-                        <span class="text-xs text-zinc-600">◆</span>
-                        <div class="h-px flex-1 bg-zinc-800" />
-                    </div>
+                    <Divider class="my-5" ornament />
 
                     <p class="text-center leading-relaxed text-zinc-400">
                         {cardDetails() ?? ""}
                     </p>
                     <div class="mt-5 flex justify-center">
-                        <button
+                        <Button
                             onClick={() => props.onPick(numeral_to_number(cardNumeral()))}
-                            class="px-4 py-2 bg-zinc-700 text-zinc-100 rounded hover:bg-zinc-600 transition-colors"
                             disabled={cardDetails() === null}
                         >
                             Pick Card
-                        </button>
+                        </Button>
                     </div>
                 </div>
             </div>
@@ -104,11 +100,7 @@ const PickCard = (props: PickCardProps) => {
                 class="text-6xl opacity-60"
             />
 
-            <div class="flex items-center gap-3">
-                <div class="h-px w-8 bg-zinc-800" />
-                <span class="text-xs text-zinc-700">◆</span>
-                <div class="h-px w-8 bg-zinc-800" />
-            </div>
+            <Divider class="w-24" ornament />
 
             <p class="text-center text-sm uppercase tracking-[0.2em]">
                 Pick a Card
@@ -135,31 +127,21 @@ const Card = (props: CardProps) => {
     });
 
     return (
-        <div
+        <Panel
             class="
       flex min-h-100 grow flex-col items-center gap-4
-      border border-zinc-700
-      bg-zinc-950
       p-5
       text-zinc-100
       shadow-lg
     "
         >
-            <div class="flex w-full items-center gap-3">
-                <div class="h-px flex-1 bg-zinc-800" />
-                <span class="text-xs text-zinc-600">◆</span>
-                <div class="h-px flex-1 bg-zinc-800" />
-            </div>
+            <Divider class="w-full" ornament />
 
             <p class="text-center text-2xl font-semibold tracking-wide">
                 {props.title ?? "Unknown Card"}
             </p>
 
-            <div class="flex w-full items-center gap-3">
-                <div class="h-px flex-1 bg-zinc-800" />
-                <span class="text-xs text-zinc-600">◆</span>
-                <div class="h-px flex-1 bg-zinc-800" />
-            </div>
+            <Divider class="w-full" ornament />
             <Switch>
                 <Match when={props.type === "Encounter"}>
                     <div class="flex flex-col gap-2 items-center justify-center">
@@ -182,7 +164,7 @@ const Card = (props: CardProps) => {
                     </div>
                 </Match>
             </Switch>
-        </div>
+        </Panel>
     );
 };
 
@@ -199,11 +181,11 @@ const TarotSlotsRoute = () => {
 
     });
 
-    return <div class="flex flex-col p-4 gap-4 items-stretch justify-start min-h-100 grow">
-        <div class="flex flex-col gap-2 items-center justify-center">
-            <h1 class="gothic-sub-heading text-2xl text-center">{slot()?.title}</h1>
-            <p class="text-center text-gray-500">{slot()?.slotType}</p>
-        </div>
+    return <Page class="items-stretch justify-start min-h-100">
+        <SectionHeading
+            title={slot()?.title}
+            subtitle={slot()?.slotType}
+        />
         <div>
             <Switch fallback={<PickCard onClick={() => setPickerModalOpen(true)} />}>
                 <Match when={slot()?.tarotNumber != null}>
@@ -223,7 +205,7 @@ const TarotSlotsRoute = () => {
                 }
                 setPickerModalOpen(false);
             }} />
-    </div>
+    </Page>
 }
 
 export default TarotSlotsRoute;

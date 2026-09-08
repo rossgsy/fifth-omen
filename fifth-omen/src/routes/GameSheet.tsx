@@ -1,17 +1,17 @@
+import { Divider, Page, Panel, SectionHeading } from "../components/ui";
+
 const GameSheetRoute = () => {
     return (
-        <main class="flex min-h-0 grow flex-col gap-4 p-4">
+        <Page>
 
-            <section class="flex grow flex-col border border-zinc-700 bg-zinc-950 p-6">
-                <p class="text-center text-xs uppercase tracking-[0.25em] text-zinc-600">
-                    Entity
-                </p>
+            <Panel as="section" class="flex grow flex-col p-6">
+                <SectionHeading
+                    eyebrow="Entity"
+                    title="The Hollow Saint"
+                    titleClass="mt-0 text-4xl tracking-wide"
+                />
 
-                <h2 class="mt-2 text-center text-4xl tracking-wide text-zinc-100">
-                    The Hollow Saint
-                </h2>
-
-                <div class="my-5 h-px bg-zinc-800" />
+                <Divider class="my-5" />
 
                 <div class="flex grow flex-col items-center justify-center gap-6">
                     <div class="text-center">
@@ -28,10 +28,10 @@ const GameSheetRoute = () => {
                         Entity rule or current effect goes here.
                     </p>
                 </div>
-            </section>
+            </Panel>
 
             <section class="grid grid-cols-2 gap-4">
-                <div class="border border-zinc-700 bg-zinc-950 p-5 text-center">
+                <Panel class="p-5 text-center">
                     <p class="text-xs uppercase tracking-[0.2em] text-zinc-600">
                         Doom
                     </p>
@@ -39,9 +39,9 @@ const GameSheetRoute = () => {
                     <div class="mt-3 text-2xl tracking-[0.25em] text-zinc-200">
                         ● ● ● ○ ○
                     </div>
-                </div>
+                </Panel>
 
-                <div class="border border-zinc-700 bg-zinc-950 p-5 text-center">
+                <Panel class="p-5 text-center">
                     <p class="text-xs uppercase tracking-[0.2em] text-zinc-600">
                         Omen
                     </p>
@@ -53,10 +53,10 @@ const GameSheetRoute = () => {
                     <p class="mt-2 text-sm text-zinc-500">
                         First player suffers 1 damage each round.
                     </p>
-                </div>
+                </Panel>
             </section>
 
-            <section class="border border-zinc-800 bg-zinc-950/60 p-4">
+            <Panel as="section" class="border-zinc-800 bg-zinc-950/60 p-4">
                 <p class="mb-3 text-center text-xs uppercase tracking-[0.2em] text-zinc-600">
                     Active Effects
                 </p>
@@ -64,9 +64,9 @@ const GameSheetRoute = () => {
                 <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
                     {/* effect cards */}
                 </div>
-            </section>
+            </Panel>
 
-        </main>
+        </Page>
     );
 };
 

@@ -2,7 +2,7 @@ import { useParams } from "@solidjs/router";
 import { Folio1, MajorArcana, lookup_arcana_for_card, lookup_encounter_for_card } from "../game";
 import { Match, Switch, useContext } from "solid-js";
 import { AppContext } from "../data/app";
-import { Icon } from "@iconify-icon/solid";
+import { Divider, IconButton, Page, SectionHeading } from "../components/ui";
 
 const TarotCardRoute = () => {
     const appContext = useContext(AppContext);
@@ -18,31 +18,34 @@ const TarotCardRoute = () => {
     let encounter = lookup_encounter_for_card(id);
     let entity = folio.entities[associatedKey];
 
-    return <div class="flex flex-col items-stretch justify-start min-h-100 gap-4 grow p-4">
-        <h2 class="gothic-sub-heading text-2xl text-center">{MajorArcana[id] ?? "No major arcana"}</h2>
-        <hr />
+    const selectEntity = () => {
+        appContext?.setContextValue({
+            ...appContext.contextValue(),
+            activeEntity: associatedKey
+        });
+    };
+
+    return <Page class="items-stretch justify-start min-h-100">
+        <SectionHeading title={MajorArcana[id] ?? "No major arcana"} />
+        <Divider />
         <div class="flex flex-row justify-between items-center">
             <div class="flex flex-col">
                 <h3 class="gothic-sub-heading">Entity</h3>
                 <p>{entity?.name ?? "No entity"}</p>
             </div>
-            <div class="bg-orange-800 text-white p-4 rounded-full flex">
-                <Icon icon="game-icons:tentacles-skull" class="text-2xl"
-                    onClick={() => {
-                        appContext?.setContextValue({
-                            ...appContext.contextValue(),
-                            activeEntity: associatedKey
-                        });
-                    }}
-                />
-            </div>
+            <IconButton
+                label="Select entity"
+                icon="game-icons:tentacles-skull"
+                tone="orange"
+                onClick={selectEntity}
+            />
         </div>
-        <hr />
+        <Divider />
         <div>
             <h3 class="gothic-sub-heading">Encounter - {encounter?.name ?? "No encounter"}</h3>
             <p>{encounter?.rule ?? "No rule"}</p>
         </div>
-        <hr />
+        <Divider />
         <div class="flex flex-col gap-2">
             <div class="flex flex-row justify-between items-center gap-4">
                 <div class="flex flex-col gap-2">
@@ -51,16 +54,12 @@ const TarotCardRoute = () => {
                 </div>
                 <Switch>
                     <Match when={arcana?.rule_face_up}>
-                        <div class="bg-orange-800 text-white p-4 rounded-full flex">
-                            <Icon icon="game-icons:card-play" class="text-2xl"
-                                onClick={() => {
-                                    appContext?.setContextValue({
-                                        ...appContext.contextValue(),
-                                        activeEntity: associatedKey
-                                    });
-                                }}
-                            />
-                        </div>
+                        <IconButton
+                            label="Use face up arcana"
+                            icon="game-icons:card-play"
+                            tone="orange"
+                            onClick={selectEntity}
+                        />
                     </Match>
                 </Switch>
             </div>
@@ -71,22 +70,18 @@ const TarotCardRoute = () => {
                 </div>
                 <Switch>
                     <Match when={arcana?.rule_face_down}>
-                        <div class="bg-orange-800 text-white p-4 rounded-full flex">
-                            <Icon icon="game-icons:card-play" class="text-2xl"
-                                onClick={() => {
-                                    appContext?.setContextValue({
-                                        ...appContext.contextValue(),
-                                        activeEntity: associatedKey
-                                    });
-                                }}
-                            />
-                        </div>
+                        <IconButton
+                            label="Use face down arcana"
+                            icon="game-icons:card-play"
+                            tone="orange"
+                            onClick={selectEntity}
+                        />
                     </Match>
                 </Switch>
             </div>
         </div>
-        <hr />
-    </div>
+        <Divider />
+    </Page>
 }
 
 export default TarotCardRoute;

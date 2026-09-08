@@ -1,18 +1,20 @@
-import { createSignal } from "solid-js";
+import { ActionCard, Page } from "../components/ui";
 import { Folio1 } from "../game";
 
 const GrimoireListRoute = () => {
-    const [folio, setFolio] = createSignal(Folio1);
-
     return (
-        <div class="flex flex-col gap-4 items-stretch p-4">
-            {Object.keys(folio().entities).map((_, key: number) => {
-                const entity = folio().entities[key];
+        <Page class="items-stretch">
+            {Object.keys(Folio1.entities).map((_, key: number) => {
+                const entity = Folio1.entities[key];
                 return (
-                    <a href={`/grimoire/${key}`} class="gothic-sub-heading text-xl text-center p-4 border rounded-md text-center">{entity?.name}</a>
+                    <ActionCard
+                        href={`/grimoire/${key}`}
+                        title={entity?.name}
+                        class="text-center"
+                    />
                 );
             })}
-        </div>
+        </Page>
     );
 };
 
