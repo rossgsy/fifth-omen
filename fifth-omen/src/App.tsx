@@ -2,13 +2,8 @@ import { Match, Show, Switch, createEffect, createSignal, onCleanup, onMount, us
 import AppContextProvider, { AppContext } from './data/app';
 import { Route, Router } from "@solidjs/router";
 import PlaybookRoute from './routes/Playbook';
-import TarotRoute from './routes/Tarot';
-import TarotCardRoute from './routes/TarotCard';
-import HomeRoute from './routes/Home';
-import GrimoireEntryRoute from './routes/GrimoireEntry';
-import TarotSlotsRoute from './routes/TarotSlots';
 import GameSheetRoute from './routes/GameSheet';
-import { ActionCard, Button, IconButton } from './components/ui';
+import { ActionCard, Button } from './components/ui';
 import { Icon } from '@iconify-icon/solid';
 import QRCode from 'qrcode';
 
@@ -48,10 +43,6 @@ const AppInner: Component = () => {
     <Match when={appContext?.contextValue().deviceMode === "player"}>
       <Router>
         <Route path="/" component={PlaybookRoute} />
-        <Route path="/grimoire" component={GrimoireEntryRoute} />
-        <Route path="/tarot" component={TarotRoute} />
-        <Route path="/tarot/:id" component={TarotCardRoute} />
-        <Route path="/tarot/slots/:id" component={TarotSlotsRoute} />
       </Router>
     </Match>
     <Match when={appContext?.contextValue().deviceMode === "gamesheet"}>
@@ -61,20 +52,6 @@ const AppInner: Component = () => {
     </Match>
   </Switch>
 };
-
-const NavBar = () => {
-  const appContext = useContext(AppContext);
-
-  return <Switch>
-    <Match when={appContext?.contextValue().deviceMode === "player"}>
-      <div class="flex flex-row p-4 gap-4 content-end justify-end">
-        <IconButton href="/" label="Playbook" icon="game-icons:character" tone="red" iconClass="text-4xl" />
-        <IconButton href="/tarot" label="Tarot" icon="game-icons:poker-hand" tone="purple" iconClass="text-4xl" />
-        <IconButton href="/grimoire" label="Grimoire" icon="game-icons:tentacles-skull" tone="teal" iconClass="text-4xl" />
-      </div>
-    </Match>
-  </Switch>
-}
 
 const FullscreenButton: Component = () => {
   const [isFullscreen, setIsFullscreen] = createSignal(false);
@@ -139,7 +116,7 @@ const FullscreenButton: Component = () => {
       aria-label={isFullscreen() ? "Exit fullscreen" : "Enter fullscreen"}
       title={isFullscreen() ? "Exit fullscreen" : "Enter fullscreen"}
       onClick={toggleFullscreen}
-      class="absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded bg-zinc-800 text-2xl text-white transition-colors hover:bg-zinc-700"
+      class="flex h-10 w-10 items-center justify-center rounded bg-zinc-800 text-2xl text-white transition-colors hover:bg-zinc-700"
     >
       <Icon icon={isFullscreen() ? "mdi:fullscreen-exit" : "mdi:fullscreen"} />
     </button>
@@ -174,7 +151,7 @@ const QrShareButton: Component = () => {
         aria-label="Show app QR code"
         title="Show app QR code"
         onClick={() => setIsOpen(true)}
-        class="absolute right-14 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded bg-zinc-800 text-2xl text-white transition-colors hover:bg-zinc-700"
+        class="flex h-10 w-10 items-center justify-center rounded bg-zinc-800 text-2xl text-white transition-colors hover:bg-zinc-700"
       >
         <Icon icon="mdi:qrcode" />
       </button>
@@ -218,22 +195,38 @@ const QrShareButton: Component = () => {
 
 const HeaderControls: Component = () => {
   const appContext = useContext(AppContext);
+  const deviceMode = () => appContext?.contextValue().deviceMode;
 
-  const resetSheet = () => {
+  const resetDevice = () => {
     if (!appContext) return;
-    if (!window.confirm("Reset the game sheet? Drawn cards, Presence, resources, doom, and active arcana will be cleared.")) return;
 
-    appContext.setContextValue({
-      ...appContext.contextValue(),
-      entityPresence: 0,
-      entityResource: 0,
-      globalDoom: 0,
-      activeArcanaCards: [null, null],
-      activeEntityCard: null,
-      activeEntity: null,
-      drawnTarotCards: [null, null, null, null, null],
-      currentPhase: 0,
-    });
+    if (deviceMode() === "player") {
+      if (!window.confirm("Reset this player sheet? The selected playbook and health will be cleared.")) return;
+
+      appContext.setContextValue({
+        ...appContext.contextValue(),
+        selectedPlaybook: null,
+        playerHealth: 0,
+        playerProgressionChoices: [null, null, null],
+      });
+      return;
+    }
+
+    if (deviceMode() === "gamesheet") {
+      if (!window.confirm("Reset the game sheet? Drawn cards, Presence, resources, doom, and active arcana will be cleared.")) return;
+
+      appContext.setContextValue({
+        ...appContext.contextValue(),
+        entityPresence: 0,
+        entityResource: 0,
+        globalDoom: 0,
+        activeArcanaCards: [null, null],
+        activeEntityCard: null,
+        activeEntity: null,
+        drawnTarotCards: [null, null, null, null, null],
+        currentPhase: 0,
+      });
+    }
   };
 
   const changeDeviceType = () => {
@@ -245,11 +238,11 @@ const HeaderControls: Component = () => {
 
   return (
     <Switch>
-      <Match when={appContext?.contextValue().deviceMode === "gamesheet"}>
-        <div class="absolute left-2 top-1/2 flex -translate-y-1/2 gap-2">
+      <Match when={deviceMode() !== null}>
+        <div class="flex gap-2">
           <Button
             class="min-h-10 bg-red-900 px-3 text-xs uppercase tracking-[0.14em] hover:bg-red-800 disabled:hover:bg-red-900"
-            onClick={resetSheet}
+            onClick={resetDevice}
           >
             Reset
           </Button>
@@ -269,16 +262,19 @@ const App: Component = () => {
   return (
     <div class="flex h-screen flex-col items-stretch justify-between bg-zinc-900">
       <AppContextProvider>
-        <div class="relative border-b-1 border-b-white p-2 px-36">
-          <HeaderControls />
-          <a href="/" class="block gothic-heading text-4xl text-center text-white md:text-5xl">Fifth Omen</a>
-          <QrShareButton />
-          <FullscreenButton />
+        <div class="grid grid-cols-[auto_1fr_auto] items-center gap-2 border-b-1 border-b-white p-2">
+          <div class="min-w-0">
+            <HeaderControls />
+          </div>
+          <a href="/" class="block min-w-0 truncate text-center gothic-heading text-3xl text-white sm:text-4xl md:text-5xl">Fifth Omen</a>
+          <div class="flex gap-2">
+            <QrShareButton />
+            <FullscreenButton />
+          </div>
         </div>
         <div class="text-white grow flex overflow-auto items-stretch flex-col">
           <AppInner />
         </div>
-        <NavBar />
       </AppContextProvider>
     </div >
   );

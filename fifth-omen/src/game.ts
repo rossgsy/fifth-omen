@@ -32,13 +32,16 @@ export interface Action {
 
 export interface Playbook {
     name: string;
+    description: string;
     health: number;
     draftAbility: string;
     actions: Action[];
     progressionActions: Action[];
+    progression: ProgressionStep[];
 }
 
 export interface ProgressionStep {
+    tier: "I" | "II" | "III";
     left: string;
     right: string;
 }
@@ -86,6 +89,7 @@ export interface Folio {
 export const playbooks: Playbook[] = [
     {
         name: "The Warden",
+        description: "A steadfast protector who turns careful timing and borrowed strength into survival.",
         health: 8,
         draftAbility: "immediately after another player makes their first draft, you may choose a die from the pool as that player's second die. That player may accept or refuse it. If accepted, they take it immediately and are skipped during the second draft pass.",
         actions: [
@@ -120,7 +124,43 @@ export const playbooks: Playbook[] = [
                 description: "Add 3 Ward."
             }
         ],
-        progressionActions: []
+        progressionActions: [
+            {
+                requirement: "Tier I",
+                diceRule: "L + R = 7",
+                name: "Hold the Line",
+                description: "Add 1 Ward, then deal 1 Damage if any Ward remains."
+            },
+            {
+                requirement: "Tier II",
+                diceRule: "L < R",
+                name: "Rallying Guard",
+                description: "Heal 1 HP and add 2 Ward."
+            },
+            {
+                requirement: "Tier III",
+                diceRule: "Σ ≥ 10",
+                name: "Unbroken Vow",
+                description: "Deal 2 Damage. If you are at 3 HP or less, deal +1 Damage."
+            }
+        ],
+        progression: [
+            {
+                tier: "I",
+                left: "+1 maximum HP",
+                right: "Ward actions add +1 Ward"
+            },
+            {
+                tier: "II",
+                left: "Once per entity, prevent 1 Damage to another player",
+                right: "Heal actions may target two players"
+            },
+            {
+                tier: "III",
+                left: "Interpose also removes 1 Doom",
+                right: "Bastion also deals 1 Damage"
+            }
+        ]
     }
 ];
 

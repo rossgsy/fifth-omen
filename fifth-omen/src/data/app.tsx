@@ -10,6 +10,7 @@ export const AppContext = createContext<{
 export interface AppContextValue {
     selectedPlaybook: number | null;
     playerHealth: number;
+    playerProgressionChoices: Array<"left" | "right" | null>;
     entityPresence: number;
     entityResource: number;
     globalDoom: number;
@@ -37,8 +38,9 @@ const AppContextProvider = (props: AppContextProviderProps) => {
     let storedContext = window.localStorage.getItem('appContext');
     const savedContext = storedContext ? JSON.parse(storedContext) : {};
     let initialContext: AppContextValue = {
-        selectedPlaybook: 0,
-        playerHealth: 8,
+        selectedPlaybook: null,
+        playerHealth: 0,
+        playerProgressionChoices: [null, null, null],
         entityPresence: 0,
         entityResource: 0,
         globalDoom: 0,
@@ -98,6 +100,11 @@ const AppContextProvider = (props: AppContextProviderProps) => {
             savedContext.drawnTarotCards?.[4] ?? null,
         ],
         currentPhase: savedContext.currentPhase ?? initialContext.currentPhase,
+        playerProgressionChoices: [
+            savedContext.playerProgressionChoices?.[0] ?? null,
+            savedContext.playerProgressionChoices?.[1] ?? null,
+            savedContext.playerProgressionChoices?.[2] ?? null,
+        ],
         tarotSlots: savedContext.tarotSlots ?? initialContext.tarotSlots,
     };
 

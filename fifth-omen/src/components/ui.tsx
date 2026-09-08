@@ -20,6 +20,7 @@ export const Page = (props: PageProps) => (
 type PanelProps = ParentProps<ClassProp & {
     as?: "div" | "section";
     interactive?: boolean;
+    onClick?: JSX.EventHandlerUnion<HTMLElement, MouseEvent>;
 }>;
 
 export const Panel = (props: PanelProps) => {
@@ -30,8 +31,8 @@ export const Panel = (props: PanelProps) => {
     );
 
     return props.as === "section"
-        ? <section class={classes()}>{props.children}</section>
-        : <div class={classes()}>{props.children}</div>;
+        ? <section onClick={props.onClick as JSX.EventHandlerUnion<HTMLElement, MouseEvent>} class={classes()}>{props.children}</section>
+        : <div onClick={props.onClick as JSX.EventHandlerUnion<HTMLDivElement, MouseEvent>} class={classes()}>{props.children}</div>;
 };
 
 type SectionHeadingProps = ClassProp & {
