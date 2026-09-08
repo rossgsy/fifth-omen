@@ -50,6 +50,7 @@ export interface EntityAction {
 
 export interface Entity {
     name: string;
+    quote: string;
     presenceRule: string;
     first_draft_actions: EntityAction[];
     second_draft_actions: EntityAction[];
@@ -127,6 +128,7 @@ export const Folio1: Folio = {
     entities: {
         0: {
             name: "The Hollow Saint",
+            quote: "Blessed are the hollow.",
             presenceRule: "10 + 2 per Player",
             first_draft_actions: [
                 {
@@ -172,6 +174,7 @@ export const Folio1: Folio = {
         },
         1: {
             name: "The Pale Mourner",
+            quote: "Mourning never ends.",
             presenceRule: "10 + 2 per Player",
             first_draft_actions: [],
             second_draft_actions: [],
@@ -179,6 +182,7 @@ export const Folio1: Folio = {
         },
         2: {
             name: "The Crooked King",
+            quote: "A Twisted Monarch",
             presenceRule: "12 + 2 per Player",
             first_draft_actions: [],
             second_draft_actions: [],
@@ -259,7 +263,11 @@ export const lookup_arcana_for_card = (id: number) => {
     return values.length > 0 ? values[0] : null;
 }
 
-export const lookup_encounter_for_card = (id: number) => {
+export const lookup_encounter_for_card = (id: number) : Encounter | null => {
     let values = Object.values(Folio1.encounters).filter(encounter => encounter.tarot_cards.includes(id));
     return values.length > 0 ? values[0] : null;
+}
+
+export const lookup_entity_for_card = (id: number) : Entity | null => {
+    return Folio1.entities[id % Object.values(Folio1.entities).length];
 }
