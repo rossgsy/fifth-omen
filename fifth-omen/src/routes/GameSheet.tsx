@@ -115,6 +115,29 @@ const RuleCard = (props: { label: string; children: string | undefined }) => (
     </div>
 );
 
+const ArcanaRule = (props: { isStricture?: boolean; rule: string }) => (
+    <div>
+        <div class="flex flex-wrap items-center gap-2">
+            <Show when={props.isStricture}>
+                <span class="border border-red-900 bg-red-950 px-2 py-1 text-[0.65rem] uppercase tracking-[0.16em] text-red-200">
+                    Stricture
+                </span>
+            </Show>
+            <Show when={props.isStricture}>
+                <span class="text-xs leading-snug text-red-300">
+                    +1 Doom when broken
+                </span>
+            </Show>
+        </div>
+        <p class={props.isStricture
+            ? "mt-1 text-xs leading-relaxed text-zinc-300"
+            : "mt-1 text-xs leading-relaxed text-zinc-400"}
+        >
+            {props.rule}
+        </p>
+    </div>
+);
+
 const EntityResourcePanel = (props: {
     resource: EntityResource;
     value: number;
@@ -257,6 +280,7 @@ const GameSheetRoute = () => {
                 slotTitle: index === 0 ? "Second Card" : "Fourth Card",
                 numeral: number_to_numeral(tarotNumber),
                 cardName: MajorArcana[tarotNumber],
+                isStricture: arcana?.is_stricture ?? false,
                 rule: arcana?.rule_face_up || arcana?.rule_face_down || "No arcana rule set for this card.",
             };
         }).filter((arcana): arcana is NonNullable<typeof arcana> => arcana !== null)
@@ -320,9 +344,10 @@ const GameSheetRoute = () => {
                                     <h3 class="mt-1 gothic-sub-heading text-base text-zinc-100">
                                         {arcana.cardName}
                                     </h3>
-                                    <p class="mt-1 text-xs leading-relaxed text-zinc-400">
-                                        {arcana.rule}
-                                    </p>
+                                    <ArcanaRule
+                                        isStricture={arcana.isStricture}
+                                        rule={arcana.rule}
+                                    />
                                 </div>
                             )}
                         </For>
@@ -460,9 +485,15 @@ const GameSheetRoute = () => {
                             <RuleCard label={`Encounter - ${currentEncounter()?.name ?? "Unknown Encounter"}`}>
                                 {currentEncounter()?.rule}
                             </RuleCard>
-                            <RuleCard label="Arcana">
-                                {lookup_arcana_for_card(currentCard()!)?.rule_face_up || lookup_arcana_for_card(currentCard()!)?.rule_face_down || "No arcana rule set for this card."}
-                            </RuleCard>
+                            <div class="border-t border-zinc-800 pt-2 first:border-t-0 first:pt-0">
+                                <p class="text-xs uppercase tracking-[0.18em] text-zinc-600">
+                                    Arcana
+                                </p>
+                                <ArcanaRule
+                                    isStricture={lookup_arcana_for_card(currentCard()!)?.is_stricture}
+                                    rule={lookup_arcana_for_card(currentCard()!)?.rule_face_up || lookup_arcana_for_card(currentCard()!)?.rule_face_down || "No arcana rule set for this card."}
+                                />
+                            </div>
                         </section>
                     </Show>
 
