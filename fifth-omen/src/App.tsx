@@ -1,4 +1,4 @@
-import { Match, Show, Switch, createSignal, onCleanup, onMount, useContext, type Component } from 'solid-js';
+import { Match, Show, Switch, createEffect, createSignal, onCleanup, onMount, useContext, type Component } from 'solid-js';
 import AppContextProvider, { AppContext } from './data/app';
 import { Route, Router } from "@solidjs/router";
 import PlaybookRoute from './routes/Playbook';
@@ -10,6 +10,7 @@ import TarotSlotsRoute from './routes/TarotSlots';
 import GameSheetRoute from './routes/GameSheet';
 import { ActionCard, Button, IconButton } from './components/ui';
 import { Icon } from '@iconify-icon/solid';
+import QRCode from 'qrcode';
 
 type FullscreenDocument = Document & {
   webkitFullscreenElement?: Element | null;
@@ -147,9 +148,24 @@ const FullscreenButton: Component = () => {
 
 const QrShareButton: Component = () => {
   const [isOpen, setIsOpen] = createSignal(false);
-  const qrCodeUrl = () => (
-    `https://api.qrserver.com/v1/create-qr-code/?size=360x360&margin=12&data=${encodeURIComponent(SHARE_URL)}`
-  );
+  const [qrSvg, setQrSvg] = createSignal("");
+
+  createEffect(() => {
+    if (!isOpen() || qrSvg()) return;
+
+    QRCode.toString(SHARE_URL, {
+      color: {
+        dark: "#000000",
+        light: "#ffffff",
+      },
+      errorCorrectionLevel: "M",
+      margin: 2,
+      type: "svg",
+      width: 320,
+    }).then(setQrSvg).catch((error) => {
+      console.warn("QR code generation failed", error);
+    });
+  });
 
   return (
     <>
@@ -175,10 +191,11 @@ const QrShareButton: Component = () => {
             <p class="text-xs uppercase tracking-[0.18em] text-zinc-600">
               Join Game
             </p>
-            <img
-              src={qrCodeUrl()}
-              alt={`QR code for ${SHARE_URL}`}
-              class="mx-auto mt-4 h-72 w-72 bg-white p-3"
+            <div
+              role="img"
+              aria-label={`QR code for ${SHARE_URL}`}
+              innerHTML={qrSvg()}
+              class="mx-auto mt-4 grid h-72 w-72 place-items-center bg-white p-3 text-zinc-950 [&_svg]:h-full [&_svg]:w-full"
             />
             <a
               href={SHARE_URL}
