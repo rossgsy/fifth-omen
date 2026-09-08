@@ -136,7 +136,7 @@ const FullscreenButton: Component = () => {
       aria-label={isFullscreen() ? "Exit fullscreen" : "Enter fullscreen"}
       title={isFullscreen() ? "Exit fullscreen" : "Enter fullscreen"}
       onClick={toggleFullscreen}
-      class="absolute right-3 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded bg-zinc-800 text-3xl text-white transition-colors hover:bg-zinc-700"
+      class="absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded bg-zinc-800 text-2xl text-white transition-colors hover:bg-zinc-700"
     >
       <Icon icon={isFullscreen() ? "mdi:fullscreen-exit" : "mdi:fullscreen"} />
     </button>
@@ -147,8 +147,8 @@ const App: Component = () => {
   return (
     <div class="flex h-screen flex-col items-stretch justify-between bg-zinc-900">
       <AppContextProvider>
-        <div class="relative border-b-1 border-b-white p-4 pr-20">
-          <a href="/" class="block gothic-heading text-6xl text-center text-white">Fifth Omen</a>
+        <div class="relative border-b-1 border-b-white p-2 pr-14">
+          <a href="/" class="block gothic-heading text-4xl text-center text-white md:text-5xl">Fifth Omen</a>
           <FullscreenButton />
         </div>
         <div class="text-white grow flex overflow-auto items-stretch flex-col">

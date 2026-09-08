@@ -66,12 +66,46 @@ const StepperTracker = (props: {
     </div>
 );
 
+const CompactStepperTracker = (props: {
+    label: string;
+    value: number;
+    max: number;
+    onChange: (value: number) => void;
+}) => (
+    <div class="grid grid-cols-[1fr_auto] items-center gap-3">
+        <div>
+            <p class="text-xs uppercase tracking-[0.18em] text-zinc-600">
+                {props.label}
+            </p>
+            <p class="mt-1 text-4xl tabular-nums leading-none text-zinc-100">
+                {props.value}
+            </p>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+            <Button
+                class="flex h-11 w-11 items-center justify-center p-0 text-2xl leading-none"
+                disabled={props.value <= 0}
+                onClick={() => props.onChange(clamp(props.value - 1, props.max))}
+            >
+                -
+            </Button>
+            <Button
+                class="flex h-11 w-11 items-center justify-center p-0 text-2xl leading-none"
+                disabled={props.value >= props.max}
+                onClick={() => props.onChange(clamp(props.value + 1, props.max))}
+            >
+                +
+            </Button>
+        </div>
+    </div>
+);
+
 const RuleCard = (props: { label: string; children: string | undefined }) => (
-    <div class="border border-zinc-800 bg-zinc-950/70 p-3">
+    <div class="border border-zinc-800 bg-zinc-950/70 p-2">
         <p class="text-xs uppercase tracking-[0.18em] text-zinc-600">
             {props.label}
         </p>
-        <p class="mt-2 text-sm leading-relaxed text-zinc-300">
+        <p class="mt-1 text-sm leading-snug text-zinc-300">
             {props.children || "No rule set."}
         </p>
     </div>
@@ -81,18 +115,18 @@ const EntityReferenceList = (props: {
     title: string;
     items: Array<{ diceRule: string; description: string }>;
 }) => (
-    <Panel as="section" class="p-3">
-        <p class="mb-3 text-center text-xs uppercase tracking-[0.18em] text-zinc-600">
+    <Panel as="section" class="p-2">
+        <p class="mb-2 text-center text-xs uppercase tracking-[0.18em] text-zinc-600">
             {props.title}
         </p>
         <div class="grid gap-2">
             <For each={props.items}>
                 {(item) => (
-                    <div class="grid grid-cols-[3rem_1fr] gap-3 border-t border-zinc-800 pt-2 first:border-t-0 first:pt-0">
+                    <div class="grid grid-cols-[3rem_1fr] gap-2 border-t border-zinc-800 pt-2 first:border-t-0 first:pt-0">
                         <div class="gothic-sub-heading text-center text-base tabular-nums text-zinc-100">
                             {item.diceRule}
                         </div>
-                        <p class="text-sm leading-relaxed text-zinc-300">
+                        <p class="text-sm leading-snug text-zinc-300">
                             {item.description}
                         </p>
                     </div>
@@ -221,10 +255,10 @@ const GameSheetRoute = () => {
     };
 
     return (
-        <Page class="gap-3 p-3">
-            <div class="grid gap-3 lg:grid-cols-[18rem_minmax(0,1fr)_auto] lg:items-stretch">
-                <Panel class="p-3">
-                    <StepperTracker
+        <Page class="gap-2 p-2">
+            <div class="grid gap-2 lg:grid-cols-[15rem_minmax(0,1fr)_auto] lg:items-stretch">
+                <Panel class="p-2">
+                    <CompactStepperTracker
                         label="Global Doom"
                         value={appContext?.contextValue().globalDoom ?? 0}
                         max={10}
@@ -232,26 +266,26 @@ const GameSheetRoute = () => {
                     />
                 </Panel>
 
-                <Panel as="section" class="border-zinc-800 bg-zinc-950/60 p-3">
-                    <p class="mb-3 text-center text-xs uppercase tracking-[0.18em] text-zinc-600">
+                <Panel as="section" class="border-zinc-800 bg-zinc-950/60 p-2">
+                    <p class="mb-2 text-center text-xs uppercase tracking-[0.18em] text-zinc-600">
                         Active Arcana
                     </p>
 
-                    <div class="grid gap-3 md:grid-cols-2">
+                    <div class="grid gap-2 md:grid-cols-2">
                         <For each={activeArcana()} fallback={
                             <p class="text-center text-zinc-500">
                                 The second and fourth cards become active arcana.
                             </p>
                         }>
                             {(arcana) => (
-                                <div class="border border-zinc-800 bg-zinc-950 p-3">
+                                <div class="border border-zinc-800 bg-zinc-950 p-2">
                                     <p class="text-xs uppercase tracking-[0.18em] text-zinc-600">
                                         {arcana.slotTitle} / {arcana.numeral}
                                     </p>
-                                    <h3 class="mt-2 gothic-sub-heading text-lg text-zinc-100">
+                                    <h3 class="mt-1 gothic-sub-heading text-base text-zinc-100">
                                         {arcana.cardName}
                                     </h3>
-                                    <p class="mt-2 text-sm leading-relaxed text-zinc-400">
+                                    <p class="mt-1 text-xs leading-relaxed text-zinc-400">
                                         {arcana.rule}
                                     </p>
                                 </div>
@@ -262,13 +296,13 @@ const GameSheetRoute = () => {
 
                 <div class="grid grid-cols-2 gap-2 lg:grid-cols-1">
                     <Button
-                        class="min-h-12 bg-red-900 text-xs uppercase tracking-[0.14em] hover:bg-red-800 disabled:hover:bg-red-900"
+                        class="min-h-10 bg-red-900 text-xs uppercase tracking-[0.14em] hover:bg-red-800 disabled:hover:bg-red-900"
                         onClick={resetSheet}
                     >
                         Reset
                     </Button>
                     <Button
-                        class="min-h-12 bg-zinc-800 text-xs uppercase tracking-[0.14em] hover:bg-zinc-700 disabled:hover:bg-zinc-800"
+                        class="min-h-10 bg-zinc-800 text-xs uppercase tracking-[0.14em] hover:bg-zinc-700 disabled:hover:bg-zinc-800"
                         onClick={changeDeviceType}
                     >
                         Device
@@ -277,21 +311,21 @@ const GameSheetRoute = () => {
             </div>
 
             <Show when={isDrawPhase()}>
-                <Panel as="section" class="grid min-h-[28rem] place-items-center p-6">
-                    <div class="grid w-full max-w-5xl gap-6">
+                <Panel as="section" class="grid place-items-center p-4">
+                    <div class="grid w-full max-w-5xl gap-4">
                         <SectionHeading
                             eyebrow={currentStep().kind}
                             title={`Draw ${currentStep().title}`}
                             subtitle="Choose the physical tarot card drawn, then lock it in."
-                            titleClass="text-4xl tracking-wide"
+                            titleClass="text-3xl tracking-wide"
                         />
 
-                        <div class="grid gap-3 md:grid-cols-5">
+                        <div class="grid gap-2 md:grid-cols-5">
                             <For each={DRAW_STEPS}>
                                 {(step, index) => (
                                     <div class={index() === currentPhase()
-                                        ? "border border-zinc-400 bg-zinc-900 p-3 text-center"
-                                        : "border border-zinc-800 bg-zinc-950/70 p-3 text-center opacity-50"}
+                                        ? "border border-zinc-400 bg-zinc-900 p-2 text-center"
+                                        : "border border-zinc-800 bg-zinc-950/70 p-2 text-center opacity-50"}
                                     >
                                         <p class="text-xs uppercase tracking-[0.18em] text-zinc-600">
                                             {step.title}
@@ -314,7 +348,7 @@ const GameSheetRoute = () => {
                                 if (value !== "") setPendingCard(Number(value));
                                 event.currentTarget.value = "";
                             }}
-                            class="mx-auto min-h-14 w-full max-w-xl border border-zinc-700 bg-zinc-950 px-4 text-xl text-zinc-100 outline-none focus:border-zinc-300"
+                            class="mx-auto min-h-12 w-full max-w-xl border border-zinc-700 bg-zinc-950 px-4 text-lg text-zinc-100 outline-none focus:border-zinc-300"
                         >
                             <option value="">Select drawn card</option>
                             <For each={cardOptions()}>
@@ -330,13 +364,13 @@ const GameSheetRoute = () => {
             </Show>
 
             <Show when={!isDrawPhase() && !isComplete()}>
-                <div class="flex min-h-0 flex-col gap-3">
-                    <Panel as="section" class="p-3">
+                <div class="flex min-h-0 flex-col gap-2">
+                    <Panel as="section" class="p-2">
                         <SectionHeading
                             eyebrow={currentStep().kind}
                             title={`${number_to_numeral(currentCard()!)} - ${MajorArcana[currentCard()!]}`}
                             subtitle={currentStep().title}
-                            titleClass="text-2xl tracking-wide"
+                            titleClass="text-xl tracking-wide"
                         />
                     </Panel>
 
@@ -351,16 +385,16 @@ const GameSheetRoute = () => {
                         >
                             {(entity) => (
                                 <>
-                                    <Panel as="section" class="flex flex-col gap-3 p-3">
+                                    <Panel as="section" class="flex flex-col gap-2 p-2">
                                         <SectionHeading
                                             eyebrow="Entity"
                                             title={entity().name}
                                             subtitle={entity().quote ? `"${entity().quote}"` : undefined}
-                                            titleClass="text-2xl tracking-wide"
+                                            titleClass="text-xl tracking-wide"
                                         />
 
-                                        <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                                            <Panel class="p-3">
+                                        <div class="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                                            <Panel class="p-2">
                                                 <StepperTracker
                                                     label="Presence"
                                                     value={appContext?.contextValue().entityPresence ?? 0}
@@ -379,7 +413,7 @@ const GameSheetRoute = () => {
 
                                             <Show when={entity().uniqueResource}>
                                                 {(uniqueResource) => (
-                                                    <Panel class="p-3">
+                                                    <Panel class="p-2">
                                                         <StepperTracker
                                                             label={uniqueResource()}
                                                             value={appContext?.contextValue().entityResource ?? 0}
@@ -396,7 +430,7 @@ const GameSheetRoute = () => {
                                         </RuleCard>
                                     </Panel>
 
-                                    <div class="grid gap-3 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.6fr)]">
+                                    <div class="grid gap-2 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.6fr)]">
                                         <EntityReferenceList
                                             title="Modifiers"
                                             items={entity().first_draft_actions}
@@ -412,7 +446,7 @@ const GameSheetRoute = () => {
                     </Show>
 
                     <Show when={currentStep().kind === "Encounter"}>
-                        <Panel as="section" class="grid gap-3 p-3">
+                        <Panel as="section" class="grid gap-2 p-2">
                             <RuleCard label={`Encounter - ${currentEncounter()?.name ?? "Unknown Encounter"}`}>
                                 {currentEncounter()?.rule}
                             </RuleCard>
@@ -423,7 +457,7 @@ const GameSheetRoute = () => {
                     </Show>
 
                     <Button
-                        class="min-h-14 bg-zinc-100 text-lg uppercase tracking-[0.16em] text-zinc-950 hover:bg-zinc-300 disabled:hover:bg-zinc-100"
+                        class="min-h-12 bg-zinc-100 text-base uppercase tracking-[0.16em] text-zinc-950 hover:bg-zinc-300 disabled:hover:bg-zinc-100"
                         onClick={completePhase}
                     >
                         Complete {currentStep().kind}
@@ -432,12 +466,12 @@ const GameSheetRoute = () => {
             </Show>
 
             <Show when={isComplete()}>
-                <Panel as="section" class="grid min-h-[24rem] place-items-center p-6 text-center">
+                <Panel as="section" class="grid min-h-[16rem] place-items-center p-4 text-center">
                     <SectionHeading
                         eyebrow="Complete"
                         title="The Omen Is Set"
                         subtitle="Reset the sheet to begin another five-card draw."
-                        titleClass="text-4xl tracking-wide"
+                        titleClass="text-3xl tracking-wide"
                     />
                 </Panel>
             </Show>
