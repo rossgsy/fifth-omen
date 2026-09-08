@@ -401,7 +401,7 @@ const GameSheetRoute = () => {
                                             <SectionHeading
                                                 eyebrow="Entity"
                                                 title={entity().name}
-                                                subtitle={entity().quote ? `"${entity().quote}"` : undefined}
+                                                subtitle={entity().quote}
                                                 titleClass="text-xl tracking-wide"
                                             />
                                             <RuleCard label="Doom Rule">

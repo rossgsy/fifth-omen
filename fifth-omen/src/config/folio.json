@@ -156,6 +156,56 @@
         "empowered": "All Damage +1.",
         "ascended": "All Damage +2, +1 Doom to all Actions."
       }
+    },
+    "3": {
+      "name": "The Glass Prophet",
+      "quote": "The specimen spoke only once. Thereafter, every clock in the room ran backward.",
+      "presenceRule": "11 + 2 per player",
+      "first_draft_actions": [
+        {
+          "diceRule": "1-2",
+          "description": "Until the end of the round, all players treat Left Hand as Right Hand and Right Hand as Left Hand."
+        },
+        {
+          "diceRule": "3-4",
+          "description": "Until the end of the round, players may not regain hit points."
+        },
+        {
+          "diceRule": "5-6",
+          "description": "Recover 1 Presence after resolving the Action."
+        }
+      ],
+      "second_draft_actions": [
+        {
+          "diceRule": "1",
+          "description": "Deal 2 Damage to the first player in draft order."
+        },
+        {
+          "diceRule": "2",
+          "description": "Deal 2 Damage to the first player with L < R."
+        },
+        {
+          "diceRule": "3",
+          "description": "Add 2 Doom."
+        },
+        {
+          "diceRule": "4",
+          "description": "Deal 2 Damage to the first player with matching dice; miss if none."
+        },
+        {
+          "diceRule": "5",
+          "description": "Deal 3 Damage to the first player whose drafted dice total 8 or more."
+        },
+        {
+          "diceRule": "6",
+          "description": "Deal 1 Damage to every player, then add 1 Doom."
+        }
+      ],
+      "doom_rule": "When Doom fills, deal 1 Damage to every player and recover 3 Presence, then reset Doom.",
+      "progression": {
+        "empowered": "All Damage +1.",
+        "ascended": "All Damage +1 and every Action that adds Doom adds +1 additional Doom."
+      }
     }
   },
   "encounters": {
