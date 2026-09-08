@@ -1,4 +1,5 @@
 import { For, Match, Show, Switch, createMemo, createSignal, useContext } from "solid-js";
+import { Icon } from "@iconify-icon/solid";
 import { AppContext } from "../data/app";
 import { Playbook, Action, ProgressionStep } from "../game";
 import { Button, ConfirmDialog, Page, Panel, SectionHeading } from "./ui";
@@ -124,12 +125,73 @@ const ProgressionChoice = (props: {
             {props.side}
         </p>
         <p class="mt-2 text-sm leading-snug">
-            {props.step[props.side]}
+            {props.step[props.side].trim() || "Unavailable"}
         </p>
     </button>
 );
 
 type PlayerSheetTab = "actions" | "draft" | "progression";
+type ProgressionSide = "left" | "right";
+
+const hasProgressionOption = (step: ProgressionStep, side: ProgressionSide) => (
+    step[side].trim().length > 0
+);
+
+const RULE_KEY = [
+    { symbol: "○", meaning: "An even die." },
+    { symbol: "●", meaning: "An odd die." },
+    { symbol: "L", meaning: "Your left drafted die." },
+    { symbol: "R", meaning: "Your right drafted die." },
+    { symbol: "Σ", meaning: "The total of your drafted dice." },
+    { symbol: "< > =", meaning: "Compare the listed dice or totals." },
+    { symbol: "≤ ≥", meaning: "Less than or equal to / greater than or equal to." },
+    { symbol: "↻", meaning: "Action may not be used two turns in a row." },
+];
+
+const RuleKeyModal = (props: { onClose: () => void }) => (
+    <div
+        class="fixed inset-0 z-50 grid place-items-center bg-black/80 p-6 backdrop-blur-sm"
+        onClick={props.onClose}
+    >
+        <Panel
+            class="w-full max-w-md p-5 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+        >
+            <div class="flex items-start justify-between gap-4">
+                <SectionHeading
+                    eyebrow="Actions"
+                    title="Rule Key"
+                    titleClass="text-2xl tracking-wide"
+                    class="items-start text-left"
+                />
+                <button
+                    type="button"
+                    aria-label="Close rule key"
+                    title="Close"
+                    onClick={props.onClose}
+                    class="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-zinc-800 text-xl text-zinc-100 transition-colors hover:bg-zinc-700"
+                >
+                    <Icon icon="mdi:close" />
+                </button>
+            </div>
+
+            <div class="mt-5 grid gap-2">
+                <For each={RULE_KEY}>
+                    {(item) => (
+                        <div class="grid grid-cols-[4rem_1fr] gap-3 border-t border-zinc-800 pt-2 first:border-t-0 first:pt-0">
+                            <div class="gothic-sub-heading text-center text-base tabular-nums text-zinc-100">
+                                {item.symbol}
+                            </div>
+                            <p class="text-sm leading-snug text-zinc-300">
+                                {item.meaning}
+                            </p>
+                        </div>
+                    )}
+                </For>
+            </div>
+        </Panel>
+    </div>
+);
 
 export interface PlaybookComponentProps {
     playbook: Playbook;
@@ -138,6 +200,7 @@ export interface PlaybookComponentProps {
 const PlaybookComponent = (props: PlaybookComponentProps) => {
     const appContext = useContext(AppContext);
     const [activeTab, setActiveTab] = createSignal<PlayerSheetTab>("actions");
+    const [isRuleKeyOpen, setIsRuleKeyOpen] = createSignal(false);
     const [pendingProgressionChoice, setPendingProgressionChoice] = createSignal<{
         tierIndex: number;
         choice: "left" | "right";
@@ -149,8 +212,17 @@ const PlaybookComponent = (props: PlaybookComponentProps) => {
     });
     const completedTiers = createMemo(() => progressionChoices().filter(Boolean).length);
 
-    const setProgressionChoice = (tierIndex: number, choice: "left" | "right") => {
+    const queueProgressionChoice = (tierIndex: number, choice: ProgressionSide) => {
+        const step = props.playbook.progression[tierIndex];
+        if (!step || !hasProgressionOption(step, choice)) return;
+
+        setPendingProgressionChoice({ tierIndex, choice });
+    };
+
+    const setProgressionChoice = (tierIndex: number, choice: ProgressionSide) => {
         if (!appContext || tierIndex !== currentTierIndex()) return;
+        const step = props.playbook.progression[tierIndex];
+        if (!step || !hasProgressionOption(step, choice)) return;
 
         const nextChoices = [...progressionChoices()];
         nextChoices[tierIndex] = choice;
@@ -203,9 +275,54 @@ const PlaybookComponent = (props: PlaybookComponentProps) => {
             <Switch>
                 <Match when={activeTab() === "actions"}>
                     <div class="grid gap-4 md:grid-cols-2">
+                        <div class="flex items-center justify-end md:col-span-2">
+                            <button
+                                type="button"
+                                aria-label="Open rule key"
+                                title="Rule key"
+                                onClick={() => setIsRuleKeyOpen(true)}
+                                class="flex h-10 w-10 items-center justify-center rounded bg-zinc-800 text-xl text-zinc-100 transition-colors hover:bg-zinc-700"
+                            >
+                                <Icon icon="mdi:help" />
+                            </button>
+                        </div>
+
+                        <section class="md:col-span-2">
+                            <p class="mb-2 text-center text-xs uppercase tracking-[0.18em] text-zinc-600">
+                                Progression Choices
+                            </p>
+                            <div class="grid gap-2 md:grid-cols-3">
+                                <For each={props.playbook.progression}>
+                                    {(step, index) => {
+                                        const choice = () => progressionChoices()[index()] ?? null;
+                                        const selectedText = () => choice() && hasProgressionOption(step, choice()!) ? step[choice()!] : "Not chosen";
+
+                                        return (
+                                            <div class={choice()
+                                                ? "border border-zinc-800 bg-zinc-950 p-2"
+                                                : "border border-zinc-900 bg-zinc-950/60 p-2 opacity-60"}
+                                            >
+                                                <div class="flex items-baseline justify-between gap-2">
+                                                    <p class="text-xs uppercase tracking-[0.18em] text-zinc-600">
+                                                        Tier {step.tier}
+                                                    </p>
+                                                    <p class="text-[0.65rem] uppercase tracking-[0.16em] text-zinc-600">
+                                                        {choice() ?? "Open"}
+                                                    </p>
+                                                </div>
+                                                <p class="mt-2 text-sm leading-snug text-zinc-300">
+                                                    {selectedText()}
+                                                </p>
+                                            </div>
+                                        );
+                                    }}
+                                </For>
+                            </div>
+                        </section>
+
                         <section>
                             <p class="mb-2 text-center text-xs uppercase tracking-[0.18em] text-zinc-600">
-                                Base Actions
+                               Base Actions
                             </p>
                             <div class="grid gap-2">
                                 <For each={props.playbook.actions}>
@@ -229,6 +346,8 @@ const PlaybookComponent = (props: PlaybookComponentProps) => {
                                 </For>
                             </div>
                         </section>
+
+
                     </div>
                 </Match>
 
@@ -252,6 +371,7 @@ const PlaybookComponent = (props: PlaybookComponentProps) => {
                                 const choice = () => progressionChoices()[index()] ?? null;
                                 const isCurrent = () => index() === currentTierIndex();
                                 const locked = () => index() > currentTierIndex() || choice() !== null;
+                                const choiceLocked = (side: ProgressionSide) => locked() || !hasProgressionOption(step, side);
 
                                 return (
                                     <section class={isCurrent()
@@ -270,15 +390,15 @@ const PlaybookComponent = (props: PlaybookComponentProps) => {
                                             step={step}
                                             side="left"
                                             selected={choice() === "left"}
-                                            locked={locked()}
-                                            onSelect={() => setPendingProgressionChoice({ tierIndex: index(), choice: "left" })}
+                                            locked={choiceLocked("left")}
+                                            onSelect={() => queueProgressionChoice(index(), "left")}
                                         />
                                         <ProgressionChoice
                                             step={step}
                                             side="right"
                                             selected={choice() === "right"}
-                                            locked={locked()}
-                                            onSelect={() => setPendingProgressionChoice({ tierIndex: index(), choice: "right" })}
+                                            locked={choiceLocked("right")}
+                                            onSelect={() => queueProgressionChoice(index(), "right")}
                                         />
                                     </section>
                                 );
@@ -298,6 +418,10 @@ const PlaybookComponent = (props: PlaybookComponentProps) => {
                 onCancel={() => setPendingProgressionChoice(null)}
                 onConfirm={confirmProgressionChoice}
             />
+        </Show>
+
+        <Show when={isRuleKeyOpen()}>
+            <RuleKeyModal onClose={() => setIsRuleKeyOpen(false)} />
         </Show>
     </Page>;
 };

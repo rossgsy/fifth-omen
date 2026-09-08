@@ -1,14 +1,164 @@
 [
   {
-    "name": "The Warden",
-    "description": "A steadfast protector who turns careful timing and borrowed strength into survival.",
-    "health": 8,
-    "draftAbility": "immediately after another player makes their first draft, you may choose a die from the pool as that player's second die. That player may accept or refuse it. If accepted, they take it immediately and are skipped during the second draft pass.",
+    "name": "The Exorcist",
+    "description": "",
+    "health": 6,
+    "draftAbility": "After the second draft pass, you may swap one of your dice with one die belonging to another player. That player may accept or refuse.",
+    "actions": [
+      {
+        "diceRule": "●",
+        "name": "Strike",
+        "description": "Deal 1 Damage and 1 Direct Damage."
+      },
+      {
+        "diceRule": "L ○",
+        "name": "Ward",
+        "description": "Add 1 Ward."
+      },
+      {
+        "diceRule": "R ≤ 2",
+        "name": "Heal",
+        "description": "Heal 1 HP."
+      },
+      {
+        "diceRule": "L ●",
+        "name": "Cleanse",
+        "description": "Remove 1 Doom."
+      },
+      {
+        "diceRule": "L = R ≥ 4",
+        "name": "Banish ↻",
+        "description": "3 Direct Damage."
+      },
+      {
+        "diceRule": "Σ ≥ 10",
+        "name": "Rebuke ↻",
+        "description": "Prevents the entity action."
+      }
+    ],
+    "progressionActions": [
+      {
+        "requirement": "Level 1",
+        "diceRule": "L ○ + R ●",
+        "name": "Consecrate",
+        "description": "Deal 1 Damage and add 1 Ward."
+      },
+      {
+        "requirement": "Level 2",
+        "diceRule": "L = R",
+        "name": "Sever ↻",
+        "description": "Deal 2 Damage and remove 1 Doom."
+      },
+      {
+        "requirement": "Level 3",
+        "diceRule": "Σ ≥ 11",
+        "name": "Expulsion ↻",
+        "description": "Deal 4 Damage and remove 1 Doom."
+      }
+    ],
+    "progression": [
+      {
+        "tier": "1",
+        "left": "Strike deals +1 damage when using a 5.",
+        "right": "Ward adds +1 ward on Σ ≤ 8."
+      },
+      {
+        "tier": "2",
+        "left": "Banish deals +1 damage.",
+        "right": "Banish destroys 1 Fodder in addition to damage."
+      },
+      {
+        "tier": "3",
+        "left": "Rebuke triggers on Σ ≥ 9.",
+        "right": ""
+      }
+    ]
+  },
+  {
+    "name": "The Medium",
+    "description": "",
+    "health": 6,
+    "draftAbility": "During the first draft, the Medium may ask the group one yes/no question about the draft. Each other player may answer only yes or no.",
     "actions": [
       {
         "diceRule": "○",
         "name": "Strike",
         "description": "Deal 1 Damage."
+      },
+      {
+        "diceRule": "R ○",
+        "name": "Ward",
+        "description": "Add 1 Ward."
+      },
+      {
+        "diceRule": "L + R ≥ 7",
+        "name": "Heal",
+        "description": "Heal 2 HP."
+      },
+      {
+        "diceRule": "L < R",
+        "name": "Cleanse",
+        "description": "Remove 2 Doom."
+      },
+      {
+        "diceRule": "Σ = 7",
+        "name": "Séance ↻",
+        "description": "After the Entity action is revealed, change it by ±1."
+      },
+      {
+        "diceRule": "L < R",
+        "name": "Intercede ↻",
+        "description": "Change the Entity’s target to any player."
+      }
+    ],
+    "progressionActions": [
+      {
+        "requirement": "Level 1",
+        "diceRule": "Σ = 7",
+        "name": "Shock ↻",
+        "description": "Deal 2 Damage."
+      },
+      {
+        "requirement": "Level 2",
+        "diceRule": "L < R",
+        "name": "Supress ↻",
+        "description": "Ignore the Entity’s First draft die this round."
+      },
+      {
+        "requirement": "Level 3",
+        "diceRule": "Σ ≥ 10",
+        "name": "Rewrite Fate ↻",
+        "description": "Replace the Entity Second draft die with any value from 1–6."
+      }
+    ],
+    "progression": [
+      {
+        "tier": "1",
+        "left": "Channel deals +1 Damage when using a 6.",
+        "right": "Premonition gives +1Ward if both dice are even."
+      },
+      {
+        "tier": "2",
+        "left": "Séance may shift the Entity die by up to ±2.",
+        "right": "Séance triggers on Σ = 6, 7, or 8."
+      },
+      {
+        "tier": "3",
+        "left": "Once per encounter, after the Entity die is known, the Medium may replace it with one of their drafted dice. That die becomes the new Entity action die.",
+        "right": ""
+      }
+    ]
+  },
+  {
+    "name": "The Warden",
+    "description": "",
+    "health": 8,
+    "draftAbility": "immediately after another player makes their first draft, the Warden may choose a die from the pool as that player’s second die. That player may accept or refuse it. If accepted, they take it immediately and are skipped during the second draft pass.",
+    "actions": [
+      {
+        "diceRule": "○",
+        "name": "Strike",
+        "description": "1 Damage."
       },
       {
         "diceRule": "L ●",
@@ -18,7 +168,7 @@
       {
         "diceRule": "R < L",
         "name": "Heal",
-        "description": "Heal 2 Total HP."
+        "description": "Heal 1 HP."
       },
       {
         "diceRule": "L = R",
@@ -28,49 +178,49 @@
       {
         "diceRule": "L > R",
         "name": "Interpose ↻",
-        "description": "You become the target of the Entity's action if it targets a single player. Gain 1 Ward."
+        "description": "You become the target of the Entity’s action if it targets a single player. Gain 1 Ward."
       },
       {
         "diceRule": "Σ ≤ 6",
         "name": "Bastion ↻",
-        "description": "Add 3 Ward."
+        "description": "Add 3 ward."
       }
     ],
     "progressionActions": [
       {
-        "requirement": "Tier I",
-        "diceRule": "L + R = 7",
-        "name": "Hold the Line",
-        "description": "Add 1 Ward, then deal 1 Damage if any Ward remains."
+        "requirement": "Level 1",
+        "diceRule": "L + R ≤ 6",
+        "name": "Stand Fast ↻",
+        "description": "Add 2 Ward. If the Entity targets you this round, add 1 additional Ward before damage is resolved."
       },
       {
-        "requirement": "Tier II",
-        "diceRule": "L < R",
-        "name": "Rallying Guard",
-        "description": "Heal 1 HP and add 2 Ward."
+        "requirement": "Level 2",
+        "diceRule": "L = R",
+        "name": "Fortify ↻",
+        "description": "Add 4 Ward."
       },
       {
-        "requirement": "Tier III",
-        "diceRule": "Σ ≥ 10",
-        "name": "Unbroken Vow",
-        "description": "Deal 2 Damage. If you are at 3 HP or less, deal +1 Damage."
+        "requirement": "Level 3",
+        "diceRule": "L > R ≥ 3",
+        "name": "Unbreakable ↻",
+        "description": "Until the end of the round, if any player that would become Broken, they remain at 1 HP instead."
       }
     ],
     "progression": [
       {
-        "tier": "I",
-        "left": "+1 maximum HP",
-        "right": "Ward actions add +1 Ward"
+        "tier": "1",
+        "left": "Smite deals +1 Damage if L ≥ 5.",
+        "right": "Brace adds +1 additional Ward if R ≤ 2."
       },
       {
-        "tier": "II",
-        "left": "Once per entity, prevent 1 Damage to another player",
-        "right": "Heal actions may target two players"
+        "tier": "2",
+        "left": "When you Interpose, reduce the incoming Damage by 1.",
+        "right": "After using Interpose, deal 1 Damage to the Entity."
       },
       {
-        "tier": "III",
-        "left": "Interpose also removes 1 Doom",
-        "right": "Bastion also deals 1 Damage"
+        "tier": "3",
+        "left": "Abilities do not Exhaust if the Entity damages you this round.",
+        "right": ""
       }
     ]
   }

@@ -58,10 +58,18 @@ export interface Entity {
     name: string;
     quote: string;
     presenceRule: string;
+    resource?: EntityResource;
     uniqueResource?: string;
     first_draft_actions: EntityAction[];
     second_draft_actions: EntityAction[];
     doom_rule: string;
+}
+
+export interface EntityResource {
+    name: string;
+    max: string;
+    starting: string;
+    rule: string;
 }
 
 export interface Encounter {

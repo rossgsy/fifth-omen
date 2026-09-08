@@ -1,7 +1,8 @@
 import { For, Show, createMemo, createSignal, useContext } from "solid-js";
-import { Button, Page, Panel, SectionHeading } from "../components/ui";
+import { Button, ConfirmDialog, Page, Panel, SectionHeading } from "../components/ui";
 import { AppContext } from "../data/app";
 import {
+    EntityResource,
     Folio1,
     MajorArcana,
     lookup_arcana_for_card,
@@ -114,6 +115,45 @@ const RuleCard = (props: { label: string; children: string | undefined }) => (
     </div>
 );
 
+const EntityResourcePanel = (props: {
+    resource: EntityResource;
+    value: number;
+    onChange: (value: number) => void;
+}) => (
+    <div class="border-l border-zinc-800 pl-2">
+        <StepperTracker
+            label={props.resource.name}
+            value={props.value}
+            max={20}
+            showDots={false}
+            onChange={props.onChange}
+        />
+        <div class="mt-2 grid gap-2 border-t border-zinc-800 pt-2">
+            <div class="grid grid-cols-2 gap-2 text-center">
+                <div>
+                    <p class="text-xs uppercase tracking-[0.18em] text-zinc-600">
+                        Starting
+                    </p>
+                    <p class="mt-1 text-sm leading-snug text-zinc-300">
+                        {props.resource.starting || "Not set."}
+                    </p>
+                </div>
+                <div>
+                    <p class="text-xs uppercase tracking-[0.18em] text-zinc-600">
+                        Max
+                    </p>
+                    <p class="mt-1 text-sm leading-snug text-zinc-300">
+                        {props.resource.max || "Not set."}
+                    </p>
+                </div>
+            </div>
+            <RuleCard label={`${props.resource.name} Rule`}>
+                {props.resource.rule}
+            </RuleCard>
+        </div>
+    </div>
+);
+
 const EntityReferenceList = (props: {
     title: string;
     items: Array<{ diceRule: string; description: string }>;
@@ -142,6 +182,7 @@ const EntityReferenceList = (props: {
 const GameSheetRoute = () => {
     const appContext = useContext(AppContext);
     const [pendingCard, setPendingCard] = createSignal<number | null>(null);
+    const [isCompletePhasePending, setIsCompletePhasePending] = createSignal(false);
 
     const updateGameSheetValue = (value: Partial<{
         entityPresence: number;
@@ -192,6 +233,21 @@ const GameSheetRoute = () => {
             : null
     ));
 
+    const resourceForEntity = (entity: {
+        resource?: EntityResource;
+        uniqueResource?: string;
+    }): EntityResource | null => {
+        if (entity.resource) return entity.resource;
+        if (!entity.uniqueResource) return null;
+
+        return {
+            name: entity.uniqueResource,
+            max: "20",
+            starting: "0",
+            rule: "",
+        };
+    };
+
     const activeArcana = createMemo(() => (
         [drawnCards()[1], drawnCards()[3]].map((tarotNumber, index) => {
             if (tarotNumber === null) return null;
@@ -230,6 +286,7 @@ const GameSheetRoute = () => {
         updateGameSheetValue({
             currentPhase: currentPhase() + 1,
         });
+        setIsCompletePhasePending(false);
     };
 
     return (
@@ -372,17 +429,13 @@ const GameSheetRoute = () => {
                                             </div>
                                         </div>
 
-                                        <Show when={entity().uniqueResource}>
-                                            {(uniqueResource) => (
-                                                <div class="border-l border-zinc-800 pl-2">
-                                                    <StepperTracker
-                                                        label={uniqueResource()}
-                                                        value={appContext?.contextValue().entityResource ?? 0}
-                                                        max={20}
-                                                        showDots={false}
-                                                        onChange={(entityResource) => updateGameSheetValue({ entityResource })}
-                                                    />
-                                                </div>
+                                        <Show when={resourceForEntity(entity())}>
+                                            {(resource) => (
+                                                <EntityResourcePanel
+                                                    resource={resource()}
+                                                    value={appContext?.contextValue().entityResource ?? 0}
+                                                    onChange={(entityResource) => updateGameSheetValue({ entityResource })}
+                                                />
                                             )}
                                         </Show>
                                     </section>
@@ -415,7 +468,7 @@ const GameSheetRoute = () => {
 
                     <Button
                         class="min-h-12 bg-zinc-100 text-base uppercase tracking-[0.16em] text-zinc-950 hover:bg-zinc-300 disabled:hover:bg-zinc-100"
-                        onClick={completePhase}
+                        onClick={() => setIsCompletePhasePending(true)}
                     >
                         Complete {currentStep().kind}
                     </Button>
@@ -459,6 +512,17 @@ const GameSheetRoute = () => {
                         </div>
                     </Panel>
                 </div>
+            </Show>
+
+            <Show when={isCompletePhasePending()}>
+                <ConfirmDialog
+                    eyebrow={currentStep().kind}
+                    title={`Complete ${currentStep().kind}?`}
+                    message={`Advance past this ${currentStep().kind.toLowerCase()} and continue to the next draw step.`}
+                    confirmLabel="Complete"
+                    onCancel={() => setIsCompletePhasePending(false)}
+                    onConfirm={completePhase}
+                />
             </Show>
         </Page>
     );

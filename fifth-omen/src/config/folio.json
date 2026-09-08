@@ -3,12 +3,68 @@
   "entities": {
     "0": {
       "name": "The Hollow Saint",
-      "quote": "Blessed are the hollow.",
-      "presenceRule": "10 + 2 per Player",
+      "quote": "The body was opened and found empty, save for the sound of distant bells.",
+      "presenceRule": "10 + 2 per player",
+      "resource": {
+        "name": "Thrall",
+        "max": "4 + 1 per player",
+        "starting": "3 + 1 per player",
+        "rule": "Thralls act as temporary HP which must be depleted before the Hollow Saint can take damage."
+      },
       "first_draft_actions": [
         {
           "diceRule": "1-2",
-          "description": "Action deals +1 damage"
+          "description": "Action deals +1 Damage."
+        },
+        {
+          "diceRule": "3-4",
+          "description": "After the Action, add 1 thrall."
+        },
+        {
+          "diceRule": "5-6",
+          "description": "Gain 1 Presence after resolving the Action."
+        }
+      ],
+      "second_draft_actions": [
+        {
+          "diceRule": "1",
+          "description": "Deal 2 Damage to the player holding the lowest value die."
+        },
+        {
+          "diceRule": "2",
+          "description": "Deal 2 Damage to the player holding the highest value die."
+        },
+        {
+          "diceRule": "3",
+          "description": "Deal 1 Damage to the first player holding a 1 or a 3."
+        },
+        {
+          "diceRule": "4",
+          "description": "Add 1 thrall and 1 Doom."
+        },
+        {
+          "diceRule": "5",
+          "description": "Deal 3 Damage to the player with the highest total drafted dice."
+        },
+        {
+          "diceRule": "6",
+          "description": "Deal 2 Damage to every player and add 1 Doom."
+        }
+      ],
+      "doom_rule": "When Doom fills, add 3 thralls, then reset Doom.",
+      "progression": {
+        "empowered": "Start with +2 thralls, all Damage +1.",
+        "ascended": "Start with +4 thralls, all Damage +2."
+      }
+    },
+    "1": {
+      "name": "The Pale Mourner",
+      "quote": "Those who heard her weeping reported dreams of cities drowned beneath a black sun",
+      "presenceRule": "10 + 2 per player",
+      "first_draft_actions": [
+        {
+          "diceRule": "1-2",
+          "description": "Action deals +1 Damage."
         },
         {
           "diceRule": "3-4",
@@ -22,7 +78,7 @@
       "second_draft_actions": [
         {
           "diceRule": "1",
-          "description": "2 Damage to first player."
+          "description": "Deal 2 Damage to the first player."
         },
         {
           "diceRule": "2",
@@ -30,7 +86,7 @@
         },
         {
           "diceRule": "3",
-          "description": "Recover 1 presence for each Ward generated this round to a maximum of 3. then add 1 Doom."
+          "description": "Recover 1 Presence for each Ward generated this round, to a maximum of 3, then add 1 Doom."
         },
         {
           "diceRule": "4",
@@ -45,57 +101,145 @@
           "description": "Deal 1 Damage to every player, ignoring Ward."
         }
       ],
-      "doom_rule": "When Doom fills, deal 2 Damage to every player."
-    },
-    "1": {
-      "name": "The Pale Mourner",
-      "quote": "Mourning never ends.",
-      "presenceRule": "10 + 2 per Player",
-      "first_draft_actions": [],
-      "second_draft_actions": [],
-      "doom_rule": ""
+      "doom_rule": "When Doom fills, deal 1 Damage to every player.",
+      "progression": {
+        "empowered": "All Damage +1. Presence regeneration maximum 4.",
+        "ascended": "All Damage +2. Presence regeneration maximum 6."
+      }
     },
     "2": {
       "name": "The Crooked King",
-      "quote": "A Twisted Monarch",
-      "presenceRule": "12 + 2 per Player",
-      "first_draft_actions": [],
-      "second_draft_actions": [],
-      "doom_rule": ""
+      "quote": "No record names the kingdom, yet several witnesses insist they once served beneath its crown.",
+      "presenceRule": "12 + 2 per player",
+      "first_draft_actions": [
+        {
+          "diceRule": "1-2",
+          "description": "Action deals +1 Damage."
+        },
+        {
+          "diceRule": "3-4",
+          "description": "Add 1 Doom after resolving the Action."
+        },
+        {
+          "diceRule": "5-6",
+          "description": "Gain 1 Presence after resolving the Action."
+        }
+      ],
+      "second_draft_actions": [
+        {
+          "diceRule": "1",
+          "description": "Deal 2 Damage to the first player."
+        },
+        {
+          "diceRule": "2",
+          "description": "Add 2 Doom."
+        },
+        {
+          "diceRule": "3",
+          "description": "Deal 2 Damage to the first player whose drafted dice total 7 or more."
+        },
+        {
+          "diceRule": "4",
+          "description": "Add 1 Doom, then recover 1 Presence for each 2 Doom currently on the track."
+        },
+        {
+          "diceRule": "5",
+          "description": "Deal 2 Damage to the first player with matching dice."
+        },
+        {
+          "diceRule": "6",
+          "description": "Deal Damage equal to current Doom to the first player in draft order, then remove 2 Doom."
+        }
+      ],
+      "doom_rule": "When Doom fills, deal 2 Damage to every player, ignoring Ward. Then reset Doom to 0.",
+      "progression": {
+        "empowered": "All Damage +1.",
+        "ascended": "All Damage +2, +1 Doom to all Actions."
+      }
     }
   },
   "encounters": {
     "0": {
       "name": "The Black Well",
-      "rule": "Each player may choose to Take 1 Damage to heal another player 1HP AND remove 1 Doom.",
-      "tarot_cards": [0, 3, 5, 9, 10, 17, 18, 19, 20]
+      "rule": "Each player may lose 1 HP. For each player who does, remove 1 Doom and recover 1 HP to another player.",
+      "tarot_cards": [
+        8,
+        9
+      ]
     },
     "1": {
       "name": "The Blood Offering",
       "rule": "One player loses 2 HP. Remove 3 Doom.",
-      "tarot_cards": [1, 2, 4, 11, 12, 16, 21]
+      "tarot_cards": [
+        1,
+        16
+      ]
     },
     "2": {
-      "name": "The Wayside Altar",
+      "name": "The Wayside Shrine",
       "rule": "Choose one: remove 2 Doom or each player recovers 1 HP.",
-      "tarot_cards": [6, 7, 8, 13, 14, 15, 22]
+      "tarot_cards": [
+        0,
+        10
+      ]
     }
   },
   "arcanas": {
     "0": {
-      "rule_face_up": "After the first draft pass each round, reroll the remaining dice",
-      "rule_face_down": "Once per round, one player may treat one drafted die as ±1 for their action only",
-      "tarot_cards": [12, 18]
+      "rule_face_up": "After the first draft pass each round, reroll the remaining dice.",
+      "rule_face_down": "",
+      "tarot_cards": [
+        0
+      ]
     },
     "1": {
-      "rule_face_up": "Two-die actions deal +1 damage",
-      "rule_face_down": "Single-die actions deal +1 damage",
-      "tarot_cards": [10]
+      "rule_face_up": "Once per round, one player may treat one drafted die as ±1 for their action only.",
+      "rule_face_down": "",
+      "tarot_cards": [
+        1
+      ]
     },
     "2": {
-      "rule_face_up": "At the end of each round, if no player took Damage, add 1 Doom",
-      "rule_face_down": "At the end of each round, if at least one player took Damage, remove 1 Doom",
-      "tarot_cards": [19]
+      "rule_face_up": "Two-die actions deal +1 Damage.",
+      "rule_face_down": "",
+      "tarot_cards": [
+        8
+      ]
+    },
+    "3": {
+      "rule_face_up": "During even numbered rounds, players cannot generate Ward.",
+      "rule_face_down": "",
+      "tarot_cards": [
+        9
+      ]
+    },
+    "4": {
+      "rule_face_up": "After the first draft pass each round, the First Player must select and reroll one undrafted die.",
+      "rule_face_down": "",
+      "tarot_cards": [
+        10
+      ]
+    },
+    "5": {
+      "rule_face_up": "At the end of each round, if no player took Damage, add 1 Doom.",
+      "rule_face_down": "",
+      "tarot_cards": [
+        16
+      ]
     }
+  },
+  "entity_tarot_map": {
+    "0": [
+      0,
+      9
+    ],
+    "1": [
+      1,
+      10
+    ],
+    "2": [
+      8,
+      16
+    ]
   }
 }
