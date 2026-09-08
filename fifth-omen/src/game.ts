@@ -52,6 +52,7 @@ export interface Entity {
     name: string;
     quote: string;
     presenceRule: string;
+    uniqueResource?: string;
     first_draft_actions: EntityAction[];
     second_draft_actions: EntityAction[];
     doom_rule: string;
@@ -257,6 +258,35 @@ export const numeral_to_number: (value: string) => number = (value) => {
     return map[ucase_value];
 };
 
+export const number_to_numeral = (value: number) => {
+    const numerals = [
+        "0",
+        "I",
+        "II",
+        "III",
+        "IV",
+        "V",
+        "VI",
+        "VII",
+        "VIII",
+        "IX",
+        "X",
+        "XI",
+        "XII",
+        "XIII",
+        "XIV",
+        "XV",
+        "XVI",
+        "XVII",
+        "XVIII",
+        "XIX",
+        "XX",
+        "XXI",
+    ];
+
+    return numerals[value] ?? value.toString();
+};
+
 
 export const lookup_arcana_for_card = (id: number) => {
     let values = Object.values(Folio1.arcanas).filter(arcana => arcana.tarot_cards.includes(id));
@@ -269,5 +299,13 @@ export const lookup_encounter_for_card = (id: number) : Encounter | null => {
 }
 
 export const lookup_entity_for_card = (id: number) : Entity | null => {
-    return Folio1.entities[id % Object.values(Folio1.entities).length];
+    const entityKey = lookup_entity_key_for_card(id);
+    return entityKey !== null ? Folio1.entities[entityKey] : null;
+}
+
+export const lookup_entity_key_for_card = (id: number): number | null => {
+    const entityKeys = Object.keys(Folio1.entities);
+    if (entityKeys.length === 0) return null;
+
+    return Number(entityKeys[id % entityKeys.length]);
 }

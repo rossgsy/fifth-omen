@@ -1,5 +1,5 @@
 import { useParams } from "@solidjs/router";
-import { Folio1, MajorArcana, lookup_arcana_for_card, lookup_encounter_for_card } from "../game";
+import { Folio1, MajorArcana, lookup_arcana_for_card, lookup_encounter_for_card, lookup_entity_key_for_card } from "../game";
 import { Match, Switch, useContext } from "solid-js";
 import { AppContext } from "../data/app";
 import { Divider, IconButton, Page, SectionHeading } from "../components/ui";
@@ -11,17 +11,17 @@ const TarotCardRoute = () => {
     let id = (Number)(params.id);
 
     let folio = Folio1;
-    let creatureCount = Object.keys(folio.entities).length;
-    let associatedKey = (Number)(Object.keys(folio.entities)[id % creatureCount]);
+    let associatedKey = lookup_entity_key_for_card(id);
 
     let arcana = lookup_arcana_for_card(id);
     let encounter = lookup_encounter_for_card(id);
-    let entity = folio.entities[associatedKey];
+    let entity = associatedKey !== null ? folio.entities[associatedKey] : null;
 
     const selectEntity = () => {
         appContext?.setContextValue({
             ...appContext.contextValue(),
-            activeEntity: associatedKey
+            activeEntity: associatedKey,
+            activeEntityCard: id,
         });
     };
 

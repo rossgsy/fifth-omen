@@ -10,7 +10,14 @@ export const AppContext = createContext<{
 export interface AppContextValue {
     selectedPlaybook: number | null;
     playerHealth: number;
+    entityPresence: number;
+    entityResource: number;
+    globalDoom: number;
+    activeArcanaCards: Array<number | null>;
+    activeEntityCard: number | null;
     activeEntity: number | null;
+    drawnTarotCards: Array<number | null>;
+    currentPhase: number;
     tarotSlots: TarotSlot[];
     deviceMode: "player" | "gamesheet" | null;
 }
@@ -28,9 +35,18 @@ export interface AppContextProviderProps {
 
 const AppContextProvider = (props: AppContextProviderProps) => {
     let storedContext = window.localStorage.getItem('appContext');
-    let initialContext = storedContext ? JSON.parse(storedContext) : {
+    const savedContext = storedContext ? JSON.parse(storedContext) : {};
+    let initialContext: AppContextValue = {
         selectedPlaybook: 0,
         playerHealth: 8,
+        entityPresence: 0,
+        entityResource: 0,
+        globalDoom: 0,
+        activeArcanaCards: [null, null],
+        activeEntityCard: null,
+        activeEntity: null,
+        drawnTarotCards: [null, null, null, null, null],
+        currentPhase: 0,
         deviceMode: null,
         tarotSlots: [
             {
@@ -64,6 +80,25 @@ const AppContextProvider = (props: AppContextProviderProps) => {
                 tarotNumber: null
             }
         ]
+    };
+
+    initialContext = {
+        ...initialContext,
+        ...savedContext,
+        entityPresence: savedContext.entityPresence ?? savedContext.entityHealth ?? initialContext.entityPresence,
+        activeArcanaCards: [
+            savedContext.activeArcanaCards?.[0] ?? null,
+            savedContext.activeArcanaCards?.[1] ?? null,
+        ],
+        drawnTarotCards: [
+            savedContext.drawnTarotCards?.[0] ?? null,
+            savedContext.drawnTarotCards?.[1] ?? null,
+            savedContext.drawnTarotCards?.[2] ?? null,
+            savedContext.drawnTarotCards?.[3] ?? null,
+            savedContext.drawnTarotCards?.[4] ?? null,
+        ],
+        currentPhase: savedContext.currentPhase ?? initialContext.currentPhase,
+        tarotSlots: savedContext.tarotSlots ?? initialContext.tarotSlots,
     };
 
     const [contextValue, setContextValue] = createSignal<AppContextValue>(initialContext);

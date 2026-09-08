@@ -1,0 +1,22 @@
+# Caddy configuration for Dashboard static frontend
+
+:80 {
+    root * /usr/share/caddy
+
+    handle_path /api/* {
+        reverse_proxy yps-platform-api:8081
+    }
+
+    handle_path /version {
+        # Expose the git commit hash baked into the image for telemetry/version checks.
+        respond "{env.GIT_COMMIT}" 200 
+        header Content-Type text/plain
+    }
+
+    handle {
+        # SPA fallback to index.html for client-side routing
+        try_files {path} /index.html
+
+        file_server
+    }
+}
