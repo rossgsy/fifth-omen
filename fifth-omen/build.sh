@@ -19,7 +19,7 @@ git_commit=$(git rev-parse --short HEAD)
 echo "Git commit: $git_commit"
 
 if [ "$env" == "local" ]; then
-    docker build -t rossgsy/fifth-omen-app:local .
+    docker build -t rossgsy/fifth-omen-app:local . --build-arg VITE_GAME_WS_URL=wss://server.fifth-omen.lab-2.paleglyph.com/ws
 elif [ "$env" == "prod" ]; then
     echo "noop"
 fi

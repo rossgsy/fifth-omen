@@ -31,19 +31,61 @@ const clearRoomFromUrl = () => {
   window.history.replaceState({}, "", url);
 };
 
+const clearedPlayerState = (value: ReturnType<AppContextStore["contextValue"]>) => ({
+  ...value,
+  selectedPlaybook: null,
+  playerHealth: 0,
+  playerProgressionChoices: [null, null, null] as Array<"left" | "right" | null>,
+});
+
 const DeviceMenu: Component = () => {
   const appContext = useContext(AppContext);
+
+  const startPlayerJoin = () => {
+    if (!appContext) return;
+    clearRoomFromUrl();
+    appContext.setContextValue({
+      ...clearedPlayerState(appContext.contextValue()),
+      roomState: null,
+      deviceMode: "player",
+      playerConnection: {
+        ...appContext.contextValue().playerConnection,
+        roomCode: "",
+        pin: "",
+        classId: null,
+        status: "idle",
+        error: null,
+      },
+    });
+  };
+
+  const startGameScreenJoin = () => {
+    if (!appContext) return;
+    appContext.setContextValue({
+      ...appContext.contextValue(),
+      roomState: null,
+      deviceMode: "gamesheet",
+      gameScreenConnection: {
+        ...appContext.contextValue().gameScreenConnection,
+        roomCode: "",
+        pin: "",
+        reconnectToken: "",
+        status: "idle",
+        error: null,
+      },
+    });
+  };
 
   return <div class="flex flex-col min-h-100 grow p-4 justify-center gap-3">
     <ActionCard
       eyebrow="Personal"
       title="Player Sheet"
-      onClick={() => appContext?.setDeviceMode("player")}
+      onClick={startPlayerJoin}
     />
     <ActionCard
       eyebrow="Shared"
       title="Game Sheet"
-      onClick={() => appContext?.setDeviceMode("gamesheet")}
+      onClick={startGameScreenJoin}
     />
   </div>
 };
@@ -53,14 +95,24 @@ const DeviceBootstrap: Component = () => {
 
   onMount(() => {
     const room = roomCodeFromUrl();
-    if (!appContext || !room || appContext.contextValue().deviceMode) return;
+    if (!appContext || !room) return;
+    const current = appContext.contextValue();
+    const isNewRoom = current.playerConnection.roomCode !== room;
+    if (current.deviceMode && !isNewRoom) return;
+
+    const baseValue = isNewRoom ? clearedPlayerState(current) : current;
     appContext.setContextValue({
-      ...appContext.contextValue(),
+      ...baseValue,
+      roomState: null,
       deviceMode: "player",
       playerConnection: {
-        ...appContext.contextValue().playerConnection,
+        ...baseValue.playerConnection,
         roomCode: room,
-        endpointUrl: appContext.contextValue().playerConnection.endpointUrl || gameWsUrl(),
+        pin: "",
+        classId: null,
+        status: "idle",
+        error: null,
+        endpointUrl: baseValue.playerConnection.endpointUrl || gameWsUrl(),
       },
     });
   });
@@ -68,21 +120,59 @@ const DeviceBootstrap: Component = () => {
   return null;
 };
 
+const PreventAccidentalRefresh: Component = () => {
+  const appContext = useContext(AppContext);
+
+  const shouldWarn = () => {
+    const value = appContext?.contextValue();
+    if (!value?.deviceMode) return false;
+    return Boolean(
+      value.gameScreenConnection.roomCode ||
+      value.playerConnection.roomCode ||
+      value.selectedPlaybook !== null ||
+      value.currentPhase > 0 ||
+      value.drawnTarotCards.some((card) => card !== null)
+    );
+  };
+
+  const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+    if (!shouldWarn()) return;
+    event.preventDefault();
+    event.returnValue = "";
+  };
+
+  onMount(() => {
+    window.addEventListener("beforeunload", handleBeforeUnload);
+  });
+
+  onCleanup(() => {
+    window.removeEventListener("beforeunload", handleBeforeUnload);
+  });
+
+  return null;
+};
+
 const AppInner: Component = () => {
   const appContext = useContext(AppContext);
+  const playerConnected = () => appContext?.contextValue().playerConnection.status === "connected";
+  const gameScreenConnected = () => appContext?.contextValue().gameScreenConnection.status === "connected";
 
   return <Switch fallback={<DeviceMenu />}>
     <Match when={appContext?.contextValue().deviceMode === "player"}>
       <PlayerConnectionManager />
-      <Router>
-        <Route path="/" component={PlaybookRoute} />
-      </Router>
+      <Show when={playerConnected()}>
+        <Router>
+          <Route path="/" component={PlaybookRoute} />
+        </Router>
+      </Show>
     </Match>
     <Match when={appContext?.contextValue().deviceMode === "gamesheet"}>
       <GameScreenConnectionManager />
-      <Router>
-        <Route path="/" component={GameSheetRoute} />
-      </Router>
+      <Show when={gameScreenConnected()}>
+        <Router>
+          <Route path="/" component={GameSheetRoute} />
+        </Router>
+      </Show>
     </Match>
   </Switch>
 };
@@ -130,11 +220,15 @@ const leaveRoom = (appContext: AppContextStore | undefined) => {
 
   window.dispatchEvent(new Event("fifth-omen:leave-room"));
   clearRoomFromUrl();
+  const mode = appContext.contextValue().deviceMode;
+  const baseValue = mode === "player" ? clearedPlayerState(appContext.contextValue()) : appContext.contextValue();
+
   appContext.setContextValue({
-    ...appContext.contextValue(),
+    ...baseValue,
+    deviceMode: null,
     roomState: null,
     gameScreenConnection: {
-      endpointUrl: appContext.contextValue().gameScreenConnection.endpointUrl,
+      endpointUrl: baseValue.gameScreenConnection.endpointUrl,
       roomCode: "",
       pin: "",
       reconnectToken: "",
@@ -142,10 +236,10 @@ const leaveRoom = (appContext: AppContextStore | undefined) => {
       error: null,
     },
     playerConnection: {
-      endpointUrl: appContext.contextValue().playerConnection.endpointUrl,
+      endpointUrl: baseValue.playerConnection.endpointUrl,
       roomCode: "",
       pin: "",
-      classId: appContext.contextValue().selectedPlaybook,
+      classId: null,
       status: "idle",
       error: null,
     },
@@ -437,6 +531,7 @@ const GameScreenConnectionManager: Component = () => {
 
 const PlayerConnectionManager: Component = () => {
   const appContext = useContext(AppContext);
+  const [roomCodeInput, setRoomCodeInput] = createSignal("");
   const [pinInput, setPinInput] = createSignal("");
   const [endpointInput, setEndpointInput] = createSignal("");
   let socket: WebSocket | null = null;
@@ -452,7 +547,7 @@ const PlayerConnectionManager: Component = () => {
   const hasCredentials = () => Boolean(roomCode() && connection()?.pin);
   const shouldPrompt = () => {
     const current = connection();
-    return Boolean(roomCode()) && (!current?.pin || current.status === "error");
+    return !roomCode() || !current?.pin || current.status === "error";
   };
 
   const setConnection = (value: Partial<PlayerConnection>) => {
@@ -604,6 +699,7 @@ const PlayerConnectionManager: Component = () => {
 
   createEffect(() => {
     const current = connection();
+    setRoomCodeInput(roomCode());
     setPinInput(current?.pin ?? "");
     setEndpointInput(current?.endpointUrl || gameWsUrl());
   });
@@ -643,7 +739,7 @@ const PlayerConnectionManager: Component = () => {
 
   const submitConnection = (event: SubmitEvent) => {
     event.preventDefault();
-    const currentRoom = roomCode().trim().toUpperCase();
+    const currentRoom = (roomCodeInput() || roomCode()).trim().toUpperCase();
     const pin = pinInput().trim();
     const endpointUrl = endpointInput().trim() || gameWsUrl();
 
@@ -668,13 +764,24 @@ const PlayerConnectionManager: Component = () => {
             Player Device
           </p>
           <h2 class="gothic-sub-heading mt-1 text-2xl text-zinc-100">
-            Join {roomCode()}
+            Join Room
           </h2>
           <Show when={connection()?.error}>
             <p class="mt-3 border border-red-900 bg-red-950 p-3 text-sm text-red-100">
               {connection()?.error}
             </p>
           </Show>
+          <label class="mt-4 block text-sm font-semibold text-zinc-300">
+            Room Code
+            <input
+              class="mt-2 h-11 w-full rounded border border-zinc-700 bg-zinc-900 px-3 text-lg uppercase tracking-[0.18em] text-zinc-100"
+              value={roomCodeInput()}
+              maxlength={5}
+              pattern="[A-Za-z0-9]{5}"
+              required
+              onInput={(event) => setRoomCodeInput(event.currentTarget.value.toUpperCase())}
+            />
+          </label>
           <label class="mt-4 block text-sm font-semibold text-zinc-300">
             PIN
             <input
@@ -975,6 +1082,11 @@ const HeaderControls: Component = () => {
         selectedPlaybook: null,
         playerHealth: 0,
         playerProgressionChoices: [null, null, null],
+        playerConnection: {
+          ...appContext.contextValue().playerConnection,
+          classId: null,
+          error: null,
+        },
       });
       return;
     }
@@ -1085,6 +1197,7 @@ const App: Component = () => {
     <div class="flex h-screen flex-col items-stretch justify-between bg-zinc-900">
       <AppContextProvider>
         <DeviceBootstrap />
+        <PreventAccidentalRefresh />
         <div class="grid grid-cols-[auto_1fr_auto] items-center gap-2 border-b-1 border-b-white p-2">
           <div class="min-w-0">
             <HeaderControls />

@@ -16,7 +16,7 @@ func (s *testSender) Close(string) {
 	s.closed = true
 }
 
-func TestPlayerClassIsReservedAndReconnects(t *testing.T) {
+func TestPlayerClassIsReleasedOnDisconnect(t *testing.T) {
 	manager := NewManager()
 	if _, err := manager.CreateRoom(CreateRoomRequest{
 		Code:     "abc12",
@@ -62,43 +62,24 @@ func TestPlayerClassIsReservedAndReconnects(t *testing.T) {
 		t.Fatalf("claim taken class error = %v, want %v", err, ErrClassTaken)
 	}
 
-	reconnectSender := &testSender{}
-	classID := 2
-	reconnect, err := manager.Join(JoinRequest{
-		RoomCode: "ABC12",
-		PIN:      "123456",
-		Role:     RolePlayer,
-		ClassID:  &classID,
-	}, reconnectSender)
-	if err != nil {
-		t.Fatalf("reconnect class player: %v", err)
-	}
-	if !reconnect.Reconnected {
-		t.Fatal("reconnect result was not marked as reconnected")
-	}
-	if reconnect.Session.Seat == nil || *reconnect.Session.Seat != 0 {
-		t.Fatalf("reconnected player seat = %v, want 0", reconnect.Session.Seat)
-	}
-	if !firstSender.closed {
-		t.Fatal("old sender was not closed during reconnect")
-	}
-
 	manager.Leave(first.Session.ID)
 	snapshot, err = manager.Snapshot("ABC12")
 	if err != nil {
-		t.Fatalf("snapshot after old leave: %v", err)
+		t.Fatalf("snapshot after leave: %v", err)
 	}
-	if !snapshot.Players[0].Connected {
-		t.Fatal("old session cleanup marked the reconnected player offline")
+	if len(snapshot.Players) != 1 {
+		t.Fatalf("players after leave = %d, want 1", len(snapshot.Players))
+	}
+	if snapshot.Players[0].Seat != 1 {
+		t.Fatalf("remaining player seat = %d, want 1", snapshot.Players[0].Seat)
 	}
 
-	manager.Leave(reconnect.Session.ID)
-	snapshot, err = manager.Snapshot("ABC12")
+	snapshot, err = manager.ClaimClass(second.Session.ID, 2)
 	if err != nil {
-		t.Fatalf("snapshot after reconnect leave: %v", err)
+		t.Fatalf("claim released class: %v", err)
 	}
-	if snapshot.Players[0].Connected {
-		t.Fatal("current session cleanup left player marked online")
+	if snapshot.Players[0].ClassID == nil || *snapshot.Players[0].ClassID != 2 {
+		t.Fatalf("released class claim = %v, want 2", snapshot.Players[0].ClassID)
 	}
 }
 

@@ -263,13 +263,7 @@ func (m *Manager) Leave(sessionID string) {
 				if player.sender != session.sender {
 					break
 				}
-				if player.ClassID == nil {
-					delete(room.players, player.Seat)
-					delete(room.playerToken, player.Token)
-					break
-				}
-				player.Connected = false
-				player.sender = nil
+				room.releasePlayer(player)
 			}
 		}
 	case RoleGameScreen:
@@ -308,11 +302,7 @@ func (m *Manager) ReleaseSession(sessionID string) {
 	case RolePlayer:
 		if session.Seat != nil {
 			if player := room.players[*session.Seat]; player != nil && player.Token == session.ReconnectToken {
-				delete(room.players, player.Seat)
-				delete(room.playerToken, player.Token)
-				if player.ClassID != nil {
-					delete(room.playerClass, *player.ClassID)
-				}
+				room.releasePlayer(player)
 			}
 		}
 	case RoleGameScreen:
@@ -565,6 +555,14 @@ func (r *Room) joinGameScreen(reconnectToken string, sender Sender) (JoinResult,
 		Reconnected: reconnected,
 		replaced:    replaced,
 	}, nil
+}
+
+func (r *Room) releasePlayer(player *Player) {
+	delete(r.players, player.Seat)
+	delete(r.playerToken, player.Token)
+	if player.ClassID != nil {
+		delete(r.playerClass, *player.ClassID)
+	}
 }
 
 func (r *Room) nextSeat() (int, bool) {

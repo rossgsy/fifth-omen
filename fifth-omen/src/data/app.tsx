@@ -1,5 +1,4 @@
 import { createContext, createSignal, JSX, Accessor } from "solid-js";
-import { playbooks } from "../game";
 
 export interface AppContextStore {
     contextValue: Accessor<AppContextValue>;
@@ -74,20 +73,12 @@ export interface AppContextProviderProps {
 }
 
 const ROOM_ID_STORAGE_KEY = "room_id";
-const SELECTED_SHEET_STORAGE_KEY = "selected_sheet";
-
-const readSelectedSheet = () => {
-    const value = window.localStorage.getItem(SELECTED_SHEET_STORAGE_KEY);
-    if (value === null || value === "") return null;
-
-    const parsed = Number(value);
-    return Number.isInteger(parsed) && playbooks[parsed] ? parsed : null;
-};
 
 const readRoomID = () => window.localStorage.getItem(ROOM_ID_STORAGE_KEY) ?? "";
 
 const persistAllowedState = (value: AppContextValue) => {
     window.localStorage.removeItem("appContext");
+    window.localStorage.removeItem("selected_sheet");
 
     const roomID = value.playerConnection.roomCode || value.gameScreenConnection.roomCode || value.roomState?.code || "";
     if (roomID) {
@@ -95,21 +86,15 @@ const persistAllowedState = (value: AppContextValue) => {
     } else {
         window.localStorage.removeItem(ROOM_ID_STORAGE_KEY);
     }
-
-    if (value.selectedPlaybook !== null) {
-        window.localStorage.setItem(SELECTED_SHEET_STORAGE_KEY, String(value.selectedPlaybook));
-    } else {
-        window.localStorage.removeItem(SELECTED_SHEET_STORAGE_KEY);
-    }
 };
 
 const AppContextProvider = (props: AppContextProviderProps) => {
     window.localStorage.removeItem("appContext");
+    window.localStorage.removeItem("selected_sheet");
     const storedRoomID = readRoomID();
-    const storedSelectedSheet = readSelectedSheet();
     let initialContext: AppContextValue = {
-        selectedPlaybook: storedSelectedSheet,
-        playerHealth: storedSelectedSheet !== null ? playbooks[storedSelectedSheet]?.health ?? 0 : 0,
+        selectedPlaybook: null,
+        playerHealth: 0,
         playerProgressionChoices: [null, null, null],
         entityPresence: 0,
         entityResource: 0,
@@ -133,7 +118,7 @@ const AppContextProvider = (props: AppContextProviderProps) => {
             endpointUrl: "",
             roomCode: storedRoomID,
             pin: "",
-            classId: storedSelectedSheet,
+            classId: null,
             status: "idle",
             error: null,
         },
