@@ -30,6 +30,7 @@ const PlaybookRoute = () => {
             playerConnection: {
                 ...appContext.contextValue().playerConnection,
                 classId: pendingPlaybook(),
+                error: null,
             },
         });
         window.dispatchEvent(new CustomEvent("fifth-omen:select-class", {
@@ -52,6 +53,12 @@ const PlaybookRoute = () => {
                             subtitle="This choice is locked for this device."
                             titleClass="text-3xl tracking-wide sm:text-4xl"
                         />
+
+                        <Show when={appContext?.contextValue().playerConnection.error}>
+                            <p class="border border-red-900 bg-red-950 p-3 text-sm text-red-100">
+                                {appContext?.contextValue().playerConnection.error}
+                            </p>
+                        </Show>
 
                         <div class="grid gap-3">
                             <For each={playbooks}>

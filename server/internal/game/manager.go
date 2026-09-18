@@ -289,6 +289,43 @@ func (m *Manager) Leave(sessionID string) {
 	broadcast(senders, event)
 }
 
+func (m *Manager) ReleaseSession(sessionID string) {
+	m.mu.Lock()
+	session, ok := m.sessions[sessionID]
+	if !ok {
+		m.mu.Unlock()
+		return
+	}
+	delete(m.sessions, sessionID)
+
+	room := m.rooms[session.RoomCode]
+	if room == nil {
+		m.mu.Unlock()
+		return
+	}
+
+	switch session.Role {
+	case RolePlayer:
+		if session.Seat != nil {
+			if player := room.players[*session.Seat]; player != nil && player.Token == session.ReconnectToken {
+				delete(room.players, player.Seat)
+				delete(room.playerToken, player.Token)
+				if player.ClassID != nil {
+					delete(room.playerClass, *player.ClassID)
+				}
+			}
+		}
+	case RoleGameScreen:
+		delete(room.screens, session.ReconnectToken)
+	}
+
+	senders := room.senders()
+	event := RoomEvent{Type: "room_state", Room: room.snapshot()}
+	m.mu.Unlock()
+
+	broadcast(senders, event)
+}
+
 func (m *Manager) Snapshot(roomCode string) (RoomSnapshot, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

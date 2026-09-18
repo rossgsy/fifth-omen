@@ -134,6 +134,11 @@ func (c *client) readLoop(ctx context.Context, manager *game.Manager, sessionID 
 		if msg.Type == "ping" {
 			c.Send(ServerMessage{Type: "pong"})
 		}
+		if msg.Type == "leave_room" {
+			manager.ReleaseSession(sessionID)
+			c.Close("left room")
+			return
+		}
 		if msg.Type == "select_class" && msg.ClassID != nil {
 			room, err := manager.ClaimClass(sessionID, *msg.ClassID)
 			if err != nil {

@@ -1,4 +1,5 @@
 import { createContext, createSignal, JSX, Accessor } from "solid-js";
+import { playbooks } from "../game";
 
 export interface AppContextStore {
     contextValue: Accessor<AppContextValue>;
@@ -72,12 +73,43 @@ export interface AppContextProviderProps {
     children: JSX.Element | JSX.Element[];
 }
 
+const ROOM_ID_STORAGE_KEY = "room_id";
+const SELECTED_SHEET_STORAGE_KEY = "selected_sheet";
+
+const readSelectedSheet = () => {
+    const value = window.localStorage.getItem(SELECTED_SHEET_STORAGE_KEY);
+    if (value === null || value === "") return null;
+
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && playbooks[parsed] ? parsed : null;
+};
+
+const readRoomID = () => window.localStorage.getItem(ROOM_ID_STORAGE_KEY) ?? "";
+
+const persistAllowedState = (value: AppContextValue) => {
+    window.localStorage.removeItem("appContext");
+
+    const roomID = value.playerConnection.roomCode || value.gameScreenConnection.roomCode || value.roomState?.code || "";
+    if (roomID) {
+        window.localStorage.setItem(ROOM_ID_STORAGE_KEY, roomID);
+    } else {
+        window.localStorage.removeItem(ROOM_ID_STORAGE_KEY);
+    }
+
+    if (value.selectedPlaybook !== null) {
+        window.localStorage.setItem(SELECTED_SHEET_STORAGE_KEY, String(value.selectedPlaybook));
+    } else {
+        window.localStorage.removeItem(SELECTED_SHEET_STORAGE_KEY);
+    }
+};
+
 const AppContextProvider = (props: AppContextProviderProps) => {
-    let storedContext = window.localStorage.getItem('appContext');
-    const savedContext = storedContext ? JSON.parse(storedContext) : {};
+    window.localStorage.removeItem("appContext");
+    const storedRoomID = readRoomID();
+    const storedSelectedSheet = readSelectedSheet();
     let initialContext: AppContextValue = {
-        selectedPlaybook: null,
-        playerHealth: 0,
+        selectedPlaybook: storedSelectedSheet,
+        playerHealth: storedSelectedSheet !== null ? playbooks[storedSelectedSheet]?.health ?? 0 : 0,
         playerProgressionChoices: [null, null, null],
         entityPresence: 0,
         entityResource: 0,
@@ -99,9 +131,9 @@ const AppContextProvider = (props: AppContextProviderProps) => {
         },
         playerConnection: {
             endpointUrl: "",
-            roomCode: "",
+            roomCode: storedRoomID,
             pin: "",
-            classId: null,
+            classId: storedSelectedSheet,
             status: "idle",
             error: null,
         },
@@ -140,53 +172,12 @@ const AppContextProvider = (props: AppContextProviderProps) => {
         ]
     };
 
-    initialContext = {
-        ...initialContext,
-        ...savedContext,
-        entityPresence: savedContext.entityPresence ?? savedContext.entityHealth ?? initialContext.entityPresence,
-        activeArcanaCards: [
-            savedContext.activeArcanaCards?.[0] ?? null,
-            savedContext.activeArcanaCards?.[1] ?? null,
-        ],
-        drawnTarotCards: [
-            savedContext.drawnTarotCards?.[0] ?? null,
-            savedContext.drawnTarotCards?.[1] ?? null,
-            savedContext.drawnTarotCards?.[2] ?? null,
-            savedContext.drawnTarotCards?.[3] ?? null,
-            savedContext.drawnTarotCards?.[4] ?? null,
-        ],
-        currentPhase: savedContext.currentPhase ?? initialContext.currentPhase,
-        playerProgressionChoices: [
-            savedContext.playerProgressionChoices?.[0] ?? null,
-            savedContext.playerProgressionChoices?.[1] ?? null,
-            savedContext.playerProgressionChoices?.[2] ?? null,
-        ],
-        gameScreenConnection: {
-            endpointUrl: savedContext.gameScreenConnection?.endpointUrl ?? "",
-            roomCode: savedContext.gameScreenConnection?.roomCode ?? "",
-            pin: savedContext.gameScreenConnection?.pin ?? "",
-            reconnectToken: savedContext.gameScreenConnection?.reconnectToken ?? "",
-            status: "idle",
-            error: null,
-        },
-        playerConnection: {
-            endpointUrl: savedContext.playerConnection?.endpointUrl ?? "",
-            roomCode: savedContext.playerConnection?.roomCode ?? "",
-            pin: savedContext.playerConnection?.pin ?? "",
-            classId: savedContext.playerConnection?.classId ?? savedContext.selectedPlaybook ?? null,
-            status: "idle",
-            error: null,
-        },
-        roomState: null,
-        tarotSlots: savedContext.tarotSlots ?? initialContext.tarotSlots,
-    };
-
     const [contextValue, setContextValue] = createSignal<AppContextValue>(initialContext);
 
     return <AppContext.Provider value={{
         contextValue: contextValue,
         setContextValue: (value) => {
-            window.localStorage.setItem('appContext', JSON.stringify(value));
+            persistAllowedState(value);
             setContextValue(value);
         },
         setSlotCard: (slotId, tarotNumber) => {
@@ -194,7 +185,7 @@ const AppContextProvider = (props: AppContextProviderProps) => {
                 ...contextValue(),
                 tarotSlots: contextValue().tarotSlots.map(slot => slot.slotId === slotId ? { ...slot, tarotNumber } : slot)
             };
-            window.localStorage.setItem('appContext', JSON.stringify(newValue));
+            persistAllowedState(newValue);
             setContextValue(newValue);
         },
         setDeviceMode: (mode) => {
@@ -203,7 +194,7 @@ const AppContextProvider = (props: AppContextProviderProps) => {
                 ...contextValue(),
                 deviceMode: mode
             };
-            window.localStorage.setItem('appContext', JSON.stringify(newValue));
+            persistAllowedState(newValue);
             setContextValue(newValue);
         }
     }}>{props.children}</AppContext.Provider>

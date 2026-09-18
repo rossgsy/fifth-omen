@@ -23,6 +23,13 @@ const SHARE_URL = "https://fifth-omen.lab-2.paleglyph.com/";
 
 const roomCodeFromUrl = () => new URLSearchParams(window.location.search).get("room")?.trim().toUpperCase() ?? "";
 
+const clearRoomFromUrl = () => {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has("room")) return;
+  url.searchParams.delete("room");
+  window.history.replaceState({}, "", url);
+};
+
 const DeviceMenu: Component = () => {
   const appContext = useContext(AppContext);
 
@@ -113,6 +120,33 @@ const updatePlayerConnection = (
     playerConnection: {
       ...appContext.contextValue().playerConnection,
       ...value,
+    },
+  });
+};
+
+const leaveRoom = (appContext: AppContextStore | undefined) => {
+  if (!appContext) return;
+
+  window.dispatchEvent(new Event("fifth-omen:leave-room"));
+  clearRoomFromUrl();
+  appContext.setContextValue({
+    ...appContext.contextValue(),
+    roomState: null,
+    gameScreenConnection: {
+      endpointUrl: appContext.contextValue().gameScreenConnection.endpointUrl,
+      roomCode: "",
+      pin: "",
+      reconnectToken: "",
+      status: "idle",
+      error: null,
+    },
+    playerConnection: {
+      endpointUrl: appContext.contextValue().playerConnection.endpointUrl,
+      roomCode: "",
+      pin: "",
+      classId: appContext.contextValue().selectedPlaybook,
+      status: "idle",
+      error: null,
     },
   });
 };
@@ -264,6 +298,21 @@ const GameScreenConnectionManager: Component = () => {
 
   onCleanup(() => {
     closeSocket();
+  });
+
+  const handleLeaveRoom = () => {
+    if (socket?.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: "leave_room" }));
+    }
+    closeSocket();
+  };
+
+  onMount(() => {
+    window.addEventListener("fifth-omen:leave-room", handleLeaveRoom);
+  });
+
+  onCleanup(() => {
+    window.removeEventListener("fifth-omen:leave-room", handleLeaveRoom);
   });
 
   const submitConnection = (event: SubmitEvent) => {
@@ -426,6 +475,13 @@ const PlayerConnectionManager: Component = () => {
         return;
       }
       if (message.type === "error") {
+        const code = message.data?.code;
+        if (code === "class_taken" || code === "invalid_class") {
+          setConnection({
+            error: message.data?.message || "That class is not available.",
+          });
+          return;
+        }
         setConnection({
           status: "error",
           error: message.data?.message || "The server rejected that request.",
@@ -510,6 +566,21 @@ const PlayerConnectionManager: Component = () => {
   onCleanup(() => {
     window.removeEventListener("fifth-omen:select-class", handleClassSelect);
     closeSocket();
+  });
+
+  const handleLeaveRoom = () => {
+    if (socket?.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: "leave_room" }));
+    }
+    closeSocket();
+  };
+
+  onMount(() => {
+    window.addEventListener("fifth-omen:leave-room", handleLeaveRoom);
+  });
+
+  onCleanup(() => {
+    window.removeEventListener("fifth-omen:leave-room", handleLeaveRoom);
   });
 
   const submitConnection = (event: SubmitEvent) => {
@@ -829,8 +900,13 @@ const ConnectionStatusButton: Component = () => {
 
 const HeaderControls: Component = () => {
   const appContext = useContext(AppContext);
-  const [pendingAction, setPendingAction] = createSignal<"reset" | "device" | null>(null);
+  const [pendingAction, setPendingAction] = createSignal<"reset" | "device" | "leave" | null>(null);
   const deviceMode = () => appContext?.contextValue().deviceMode;
+  const roomCode = () => (
+    deviceMode() === "player"
+      ? appContext?.contextValue().playerConnection.roomCode
+      : appContext?.contextValue().gameScreenConnection.roomCode
+  );
 
   const resetDevice = () => {
     if (!appContext) return;
@@ -869,6 +945,7 @@ const HeaderControls: Component = () => {
   const confirmPendingAction = () => {
     if (pendingAction() === "reset") resetDevice();
     if (pendingAction() === "device") changeDeviceType();
+    if (pendingAction() === "leave") leaveRoom(appContext);
     setPendingAction(null);
   };
 
@@ -895,6 +972,14 @@ const HeaderControls: Component = () => {
             >
               Device
             </Button>
+            <Show when={roomCode()}>
+              <Button
+                class="min-h-10 bg-zinc-800 px-3 text-xs uppercase tracking-[0.14em] hover:bg-zinc-700 disabled:hover:bg-zinc-800"
+                onClick={() => setPendingAction("leave")}
+              >
+                Leave
+              </Button>
+            </Show>
           </div>
         </Match>
       </Switch>
@@ -917,6 +1002,18 @@ const HeaderControls: Component = () => {
           title="Return to Device Selection?"
           message="Current sheet values will be kept."
           confirmLabel="Continue"
+          onCancel={() => setPendingAction(null)}
+          onConfirm={confirmPendingAction}
+        />
+      </Show>
+
+      <Show when={pendingAction() === "leave"}>
+        <ConfirmDialog
+          eyebrow="Room"
+          title="Leave Room?"
+          message="This device will disconnect and release its room claim."
+          confirmLabel="Leave"
+          destructive
           onCancel={() => setPendingAction(null)}
           onConfirm={confirmPendingAction}
         />
