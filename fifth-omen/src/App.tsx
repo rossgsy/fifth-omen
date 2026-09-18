@@ -20,6 +20,7 @@ type FullscreenElement = HTMLElement & {
 };
 
 const SHARE_URL = "https://fifth-omen.lab-2.paleglyph.com/";
+const JOIN_TIMEOUT_MS = 8000;
 
 const roomCodeFromUrl = () => new URLSearchParams(window.location.search).get("room")?.trim().toUpperCase() ?? "";
 
@@ -164,6 +165,21 @@ const parseRoomState = (value: unknown): RoomState | null => {
   return typeof room.code === "string" && Array.isArray(room.players) ? room : null;
 };
 
+const connectionFailureMessage = (event: CloseEvent) => {
+  if (event.reason) return event.reason;
+
+  switch (event.code) {
+    case 1006:
+      return "Could not reach the game server.";
+    case 1008:
+      return "The room code, PIN, or class was rejected.";
+    case 1013:
+      return "The room is full or temporarily unavailable.";
+    default:
+      return "Failed to connect to the room.";
+  }
+};
+
 const GameScreenConnectionManager: Component = () => {
   const appContext = useContext(AppContext);
   const [roomCodeInput, setRoomCodeInput] = createSignal("");
@@ -171,6 +187,7 @@ const GameScreenConnectionManager: Component = () => {
   const [endpointInput, setEndpointInput] = createSignal("");
   let socket: WebSocket | null = null;
   let reconnectTimer: number | undefined;
+  let joinTimer: number | undefined;
   let joined = false;
   let manuallyClosed = false;
 
@@ -188,7 +205,9 @@ const GameScreenConnectionManager: Component = () => {
   const closeSocket = () => {
     manuallyClosed = true;
     if (reconnectTimer) window.clearTimeout(reconnectTimer);
+    if (joinTimer) window.clearTimeout(joinTimer);
     reconnectTimer = undefined;
+    joinTimer = undefined;
     socket?.close();
     socket = null;
   };
@@ -218,10 +237,19 @@ const GameScreenConnectionManager: Component = () => {
 
     const nextSocket = new WebSocket(url);
     socket = nextSocket;
+    joinTimer = window.setTimeout(() => {
+      if (socket !== nextSocket || joined) return;
+      setConnection({
+        status: "error",
+        error: "Failed to connect to the room.",
+        reconnectToken: "",
+      });
+      closeSocket();
+    }, JOIN_TIMEOUT_MS);
     nextSocket.addEventListener("message", (event) => {
       if (socket !== nextSocket) return;
 
-      let message: { type?: string; room?: unknown; data?: { session?: { reconnectToken?: unknown }; room?: unknown } };
+      let message: { type?: string; room?: unknown; data?: { session?: { reconnectToken?: unknown }; room?: unknown; message?: string } };
       try {
         message = JSON.parse(event.data);
       } catch (error) {
@@ -234,9 +262,21 @@ const GameScreenConnectionManager: Component = () => {
         return;
       }
 
+      if (message.type === "error") {
+        setConnection({
+          status: joined ? connection()?.status ?? "connected" : "error",
+          error: message.data?.message || "The server rejected the connection.",
+          reconnectToken: joined ? connection()?.reconnectToken ?? "" : "",
+        });
+        if (!joined) closeSocket();
+        return;
+      }
+
       if (message.type !== "joined") return;
 
       joined = true;
+      if (joinTimer) window.clearTimeout(joinTimer);
+      joinTimer = undefined;
       const reconnectToken = message.data?.session?.reconnectToken;
       updateRoomState(appContext, parseRoomState(message.data?.room));
       setConnection({
@@ -250,11 +290,13 @@ const GameScreenConnectionManager: Component = () => {
 
       socket = null;
       if (manuallyClosed) return;
+      if (joinTimer) window.clearTimeout(joinTimer);
+      joinTimer = undefined;
 
       if (!joined || event.code === 1008 || event.code === 1003 || event.code === 1013) {
         setConnection({
           status: "error",
-          error: event.reason || "Could not join the room.",
+          error: connectionFailureMessage(event),
           reconnectToken: "",
         });
         return;
@@ -399,6 +441,7 @@ const PlayerConnectionManager: Component = () => {
   const [endpointInput, setEndpointInput] = createSignal("");
   let socket: WebSocket | null = null;
   let reconnectTimer: number | undefined;
+  let joinTimer: number | undefined;
   let joined = false;
   let manuallyClosed = false;
 
@@ -419,7 +462,9 @@ const PlayerConnectionManager: Component = () => {
   const closeSocket = () => {
     manuallyClosed = true;
     if (reconnectTimer) window.clearTimeout(reconnectTimer);
+    if (joinTimer) window.clearTimeout(joinTimer);
     reconnectTimer = undefined;
+    joinTimer = undefined;
     socket?.close();
     socket = null;
   };
@@ -453,6 +498,14 @@ const PlayerConnectionManager: Component = () => {
 
     const nextSocket = new WebSocket(url);
     socket = nextSocket;
+    joinTimer = window.setTimeout(() => {
+      if (socket !== nextSocket || joined) return;
+      setConnection({
+        status: "error",
+        error: "Failed to connect to the room.",
+      });
+      closeSocket();
+    }, JOIN_TIMEOUT_MS);
     nextSocket.addEventListener("message", (event) => {
       if (socket !== nextSocket) return;
 
@@ -484,13 +537,16 @@ const PlayerConnectionManager: Component = () => {
         }
         setConnection({
           status: "error",
-          error: message.data?.message || "The server rejected that request.",
+          error: message.data?.message || "The server rejected the connection.",
         });
+        if (!joined) closeSocket();
         return;
       }
       if (message.type !== "joined") return;
 
       joined = true;
+      if (joinTimer) window.clearTimeout(joinTimer);
+      joinTimer = undefined;
       updateRoomState(appContext, parseRoomState(message.data?.room));
       setConnection({
         status: "connected",
@@ -502,11 +558,13 @@ const PlayerConnectionManager: Component = () => {
 
       socket = null;
       if (manuallyClosed) return;
+      if (joinTimer) window.clearTimeout(joinTimer);
+      joinTimer = undefined;
 
       if (!joined || event.code === 1008 || event.code === 1003 || event.code === 1013) {
         setConnection({
           status: "error",
-          error: event.reason || "Could not join the room.",
+          error: connectionFailureMessage(event),
         });
         return;
       }
