@@ -14,6 +14,7 @@ export interface AppContextValue {
     entityPresence: number;
     entityResource: number;
     globalDoom: number;
+    globalWard: number;
     activeArcanaCards: Array<number | null>;
     activeEntityCard: number | null;
     activeEntity: number | null;
@@ -44,6 +45,7 @@ const AppContextProvider = (props: AppContextProviderProps) => {
         entityPresence: 0,
         entityResource: 0,
         globalDoom: 0,
+        globalWard: 0,
         activeArcanaCards: [null, null],
         activeEntityCard: null,
         activeEntity: null,

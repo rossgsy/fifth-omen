@@ -211,6 +211,7 @@ const GameSheetRoute = () => {
         entityPresence: number;
         entityResource: number;
         globalDoom: number;
+        globalWard: number;
         activeArcanaCards: Array<number | null>;
         activeEntityCard: number | null;
         activeEntity: number | null;
@@ -314,17 +315,24 @@ const GameSheetRoute = () => {
     };
 
     return (
-        <Page class="gap-2 p-2">
-            <div class="grid gap-2 md:grid-cols-[14rem_minmax(0,1fr)] md:items-stretch">
+        <Page class="gap-2 p-2">    
+            <div class="grid gap-2 md:grid-cols-[14rem_14rem_minmax(0,1fr)] md:items-stretch">
                 <section class="border border-zinc-800 p-2">
                     <CompactStepperTracker
-                        label="Global Doom"
+                        label="Doom"
                         value={appContext?.contextValue().globalDoom ?? 0}
                         max={10}
                         onChange={(globalDoom) => updateGameSheetValue({ globalDoom })}
                     />
                 </section>
-
+                <section class="border border-zinc-800 p-2">
+                    <CompactStepperTracker
+                        label="Ward"
+                        value={appContext?.contextValue().globalWard ?? 0}
+                        max={10}
+                        onChange={(globalWard) => updateGameSheetValue({ globalWard })}
+                    />
+                </section>
                 <section class="border border-zinc-800 p-2">
                     <p class="mb-2 text-center text-xs uppercase tracking-[0.18em] text-zinc-600">
                         Active Arcana
