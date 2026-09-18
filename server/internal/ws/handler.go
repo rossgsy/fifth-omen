@@ -5,19 +5,35 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
+	"github.com/rossgsy/fifth-omen/server/internal/game"
 	"github.com/rossgsy/fifth-omen/server/internal/httperr"
 )
 
-type Message struct {
+const sendTimeout = 5 * time.Second
+
+type ServerMessage struct {
 	Type string `json:"type"`
-	Data string `json:"data,omitempty"`
+	Data any    `json:"data,omitempty"`
 }
 
-func Handler(logger *log.Logger) http.HandlerFunc {
+type ClientMessage struct {
+	Type string `json:"type"`
+}
+
+type client struct {
+	conn   *websocket.Conn
+	logger *log.Logger
+	send   chan any
+	done   chan struct{}
+	once   sync.Once
+}
+
+func Handler(logger *log.Logger, manager *game.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 			OriginPatterns: []string{
@@ -29,30 +45,118 @@ func Handler(logger *log.Logger) http.HandlerFunc {
 			httperr.Write(w, httperr.New(http.StatusBadRequest, "websocket_upgrade_failed", "Could not upgrade request"))
 			return
 		}
-		defer conn.CloseNow()
 
-		ctx := r.Context()
-		for {
-			var msg Message
-			if err := wsjson.Read(ctx, conn, &msg); err != nil {
-				if websocket.CloseStatus(err) == websocket.StatusNormalClosure || errors.Is(err, context.Canceled) {
-					return
-				}
-				logger.Printf("websocket read failed: %v", err)
+		c := newClient(conn, logger)
+		defer c.Close("connection closed")
+
+		join, err := manager.Join(joinRequest(r), c)
+		if err != nil {
+			c.closeWithError(closeStatus(err), err.Error())
+			return
+		}
+		defer manager.Leave(join.Session.ID)
+
+		c.Send(ServerMessage{
+			Type: "joined",
+			Data: join,
+		})
+
+		go c.writeLoop(r.Context())
+		c.readLoop(r.Context())
+	}
+}
+
+func joinRequest(r *http.Request) game.JoinRequest {
+	query := r.URL.Query()
+	return game.JoinRequest{
+		RoomCode:       query.Get("room"),
+		PIN:            query.Get("pin"),
+		Role:           query.Get("role"),
+		ReconnectToken: query.Get("reconnect_token"),
+	}
+}
+
+func newClient(conn *websocket.Conn, logger *log.Logger) *client {
+	return &client{
+		conn:   conn,
+		logger: logger,
+		send:   make(chan any, 16),
+		done:   make(chan struct{}),
+	}
+}
+
+func (c *client) Send(v any) bool {
+	select {
+	case <-c.done:
+		return false
+	case c.send <- v:
+		return true
+	default:
+		c.Close("outbound websocket buffer full")
+		return false
+	}
+}
+
+func (c *client) Close(reason string) {
+	c.once.Do(func() {
+		close(c.done)
+		c.conn.Close(websocket.StatusNormalClosure, reason)
+	})
+}
+
+func (c *client) closeWithError(status websocket.StatusCode, reason string) {
+	c.once.Do(func() {
+		close(c.done)
+		c.conn.Close(status, reason)
+	})
+}
+
+func (c *client) readLoop(ctx context.Context) {
+	for {
+		var msg ClientMessage
+		if err := wsjson.Read(ctx, c.conn, &msg); err != nil {
+			if websocket.CloseStatus(err) == websocket.StatusNormalClosure || errors.Is(err, context.Canceled) {
 				return
 			}
+			c.logger.Printf("websocket read failed: %v", err)
+			return
+		}
 
-			reply := Message{
-				Type: "echo",
-				Data: msg.Data,
-			}
-			writeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			err = wsjson.Write(writeCtx, conn, reply)
+		if msg.Type == "ping" {
+			c.Send(ServerMessage{Type: "pong"})
+		}
+	}
+}
+
+func (c *client) writeLoop(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-c.done:
+			return
+		case msg := <-c.send:
+			writeCtx, cancel := context.WithTimeout(ctx, sendTimeout)
+			err := wsjson.Write(writeCtx, c.conn, msg)
 			cancel()
 			if err != nil {
-				logger.Printf("websocket write failed: %v", err)
+				c.logger.Printf("websocket write failed: %v", err)
+				c.Close("websocket write failed")
 				return
 			}
 		}
+	}
+}
+
+func closeStatus(err error) websocket.StatusCode {
+	switch {
+	case errors.Is(err, game.ErrInvalidPIN), errors.Is(err, game.ErrReconnectNotFound):
+		return websocket.StatusPolicyViolation
+	case errors.Is(err, game.ErrRoomNotFound):
+		return websocket.StatusUnsupportedData
+	case errors.Is(err, game.ErrRoomFull):
+		return websocket.StatusTryAgainLater
+	default:
+		return websocket.StatusInvalidFramePayloadData
 	}
 }

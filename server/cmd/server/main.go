@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/rossgsy/fifth-omen/server/internal/game"
 	"github.com/rossgsy/fifth-omen/server/internal/httpapi"
 )
 
@@ -17,11 +18,16 @@ var gitCommit = "unknown"
 
 func main() {
 	logger := log.New(os.Stdout, "fifth-omen-server ", log.LstdFlags|log.LUTC|log.Lshortfile)
+	manager := game.NewManager()
 
 	addr := env("HTTP_ADDR", ":8080")
+	adminPassword := os.Getenv("ADMIN_PASSWORD")
+	if adminPassword == "" {
+		logger.Print("admin endpoints disabled: ADMIN_PASSWORD is not set")
+	}
 	server := &http.Server{
 		Addr:              addr,
-		Handler:           httpapi.NewRouter(logger),
+		Handler:           httpapi.NewRouter(logger, manager, adminPassword),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
