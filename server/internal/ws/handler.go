@@ -76,6 +76,7 @@ func joinRequest(r *http.Request) game.JoinRequest {
 		PIN:            query.Get("pin"),
 		Role:           query.Get("role"),
 		ReconnectToken: query.Get("reconnect_token"),
+		PlayerName:     query.Get("name"),
 	}
 	if classValue := query.Get("class"); classValue != "" {
 		classID, err := strconv.Atoi(classValue)

@@ -4,7 +4,6 @@ export interface AppContextStore {
     contextValue: Accessor<AppContextValue>;
     setContextValue: (value: AppContextValue) => void;
     setSlotCard: (slotId: number, tarotNumber: number | null) => void;
-    setDeviceMode: (mode: "player" | "gamesheet" | null) => void;
 }
 
 export const AppContext = createContext<AppContextStore>();
@@ -44,6 +43,7 @@ export interface PlayerConnection {
     endpointUrl: string;
     roomCode: string;
     pin: string;
+    name: string;
     classId: number | null;
     status: GameScreenConnectionStatus;
     error: string | null;
@@ -73,8 +73,10 @@ export interface AppContextProviderProps {
 }
 
 const ROOM_ID_STORAGE_KEY = "room_id";
+const PLAYER_NAME_STORAGE_KEY = "player_name";
 
 const readRoomID = () => window.localStorage.getItem(ROOM_ID_STORAGE_KEY) ?? "";
+const readPlayerName = () => window.localStorage.getItem(PLAYER_NAME_STORAGE_KEY) ?? "";
 
 const persistAllowedState = (value: AppContextValue) => {
     window.localStorage.removeItem("appContext");
@@ -86,12 +88,20 @@ const persistAllowedState = (value: AppContextValue) => {
     } else {
         window.localStorage.removeItem(ROOM_ID_STORAGE_KEY);
     }
+
+    const playerName = value.playerConnection.name.trim();
+    if (playerName) {
+        window.localStorage.setItem(PLAYER_NAME_STORAGE_KEY, playerName);
+    } else {
+        window.localStorage.removeItem(PLAYER_NAME_STORAGE_KEY);
+    }
 };
 
 const AppContextProvider = (props: AppContextProviderProps) => {
     window.localStorage.removeItem("appContext");
     window.localStorage.removeItem("selected_sheet");
     const storedRoomID = readRoomID();
+    const storedPlayerName = readPlayerName();
     let initialContext: AppContextValue = {
         selectedPlaybook: null,
         playerHealth: 0,
@@ -118,6 +128,7 @@ const AppContextProvider = (props: AppContextProviderProps) => {
             endpointUrl: "",
             roomCode: storedRoomID,
             pin: "",
+            name: storedPlayerName,
             classId: null,
             status: "idle",
             error: null,
@@ -169,15 +180,6 @@ const AppContextProvider = (props: AppContextProviderProps) => {
             const newValue = {
                 ...contextValue(),
                 tarotSlots: contextValue().tarotSlots.map(slot => slot.slotId === slotId ? { ...slot, tarotNumber } : slot)
-            };
-            persistAllowedState(newValue);
-            setContextValue(newValue);
-        },
-        setDeviceMode: (mode) => {
-            console.log("Setting device mode to", mode);
-            const newValue = {
-                ...contextValue(),
-                deviceMode: mode
             };
             persistAllowedState(newValue);
             setContextValue(newValue);

@@ -82,6 +82,7 @@ type JoinRequest struct {
 	PIN            string
 	Role           string
 	ReconnectToken string
+	PlayerName     string
 	ClassID        *int
 }
 

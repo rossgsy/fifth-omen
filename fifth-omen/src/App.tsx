@@ -219,6 +219,12 @@ const leaveRoom = (appContext: AppContextStore | undefined) => {
   if (!appContext) return;
 
   window.dispatchEvent(new Event("fifth-omen:leave-room"));
+  closeConnectionPrompt(appContext);
+};
+
+const closeConnectionPrompt = (appContext: AppContextStore | undefined) => {
+  if (!appContext) return;
+
   clearRoomFromUrl();
   const mode = appContext.contextValue().deviceMode;
   const baseValue = mode === "player" ? clearedPlayerState(appContext.contextValue()) : appContext.contextValue();
@@ -239,6 +245,7 @@ const leaveRoom = (appContext: AppContextStore | undefined) => {
       endpointUrl: baseValue.playerConnection.endpointUrl,
       roomCode: "",
       pin: "",
+      name: baseValue.playerConnection.name,
       classId: null,
       status: "idle",
       error: null,
@@ -278,7 +285,6 @@ const GameScreenConnectionManager: Component = () => {
   const appContext = useContext(AppContext);
   const [roomCodeInput, setRoomCodeInput] = createSignal("");
   const [pinInput, setPinInput] = createSignal("");
-  const [endpointInput, setEndpointInput] = createSignal("");
   let socket: WebSocket | null = null;
   let reconnectTimer: number | undefined;
   let joinTimer: number | undefined;
@@ -429,7 +435,6 @@ const GameScreenConnectionManager: Component = () => {
     const current = connection();
     setRoomCodeInput(current?.roomCode ?? "");
     setPinInput(current?.pin ?? "");
-    setEndpointInput(current?.endpointUrl || gameWsUrl());
   });
 
   onCleanup(() => {
@@ -455,7 +460,7 @@ const GameScreenConnectionManager: Component = () => {
     event.preventDefault();
     const roomCode = roomCodeInput().trim().toUpperCase();
     const pin = pinInput().trim();
-    const endpointUrl = endpointInput().trim() || gameWsUrl();
+    const endpointUrl = gameWsUrl();
 
     setConnection({
       endpointUrl,
@@ -471,9 +476,18 @@ const GameScreenConnectionManager: Component = () => {
     <Show when={shouldPrompt()}>
       <div class="fixed inset-0 z-40 grid place-items-center bg-black/80 p-6 backdrop-blur-sm">
         <form
-          class="w-full max-w-sm border border-zinc-700 bg-zinc-950 p-5 shadow-2xl"
+          class="relative w-full max-w-sm border border-zinc-700 bg-zinc-950 p-5 shadow-2xl"
           onSubmit={submitConnection}
         >
+          <button
+            type="button"
+            aria-label="Close join dialog"
+            title="Close"
+            class="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded bg-zinc-900 text-xl text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-white"
+            onClick={() => closeConnectionPrompt(appContext)}
+          >
+            <Icon icon="mdi:close" />
+          </button>
           <p class="text-xs uppercase tracking-[0.18em] text-zinc-600">
             Game Screen
           </p>
@@ -508,15 +522,6 @@ const GameScreenConnectionManager: Component = () => {
               onInput={(event) => setPinInput(event.currentTarget.value)}
             />
           </label>
-          <label class="mt-4 block text-sm font-semibold text-zinc-300">
-            Server
-            <input
-              class="mt-2 h-11 w-full rounded border border-zinc-700 bg-zinc-900 px-3 text-sm text-zinc-100"
-              value={endpointInput()}
-              required
-              onInput={(event) => setEndpointInput(event.currentTarget.value)}
-            />
-          </label>
           <Button
             type="submit"
             class="mt-5 min-h-12 w-full bg-zinc-100 uppercase tracking-[0.14em] text-zinc-950 hover:bg-zinc-300"
@@ -533,7 +538,7 @@ const PlayerConnectionManager: Component = () => {
   const appContext = useContext(AppContext);
   const [roomCodeInput, setRoomCodeInput] = createSignal("");
   const [pinInput, setPinInput] = createSignal("");
-  const [endpointInput, setEndpointInput] = createSignal("");
+  const [nameInput, setNameInput] = createSignal("");
   let socket: WebSocket | null = null;
   let reconnectTimer: number | undefined;
   let joinTimer: number | undefined;
@@ -578,6 +583,10 @@ const PlayerConnectionManager: Component = () => {
     url.searchParams.set("room", currentRoom);
     url.searchParams.set("pin", current.pin);
     url.searchParams.set("role", "player");
+    const playerName = current.name.trim();
+    if (playerName) {
+      url.searchParams.set("name", playerName);
+    }
     const classID = selectedClass();
     if (classID !== null) {
       url.searchParams.set("class", String(classID));
@@ -701,7 +710,7 @@ const PlayerConnectionManager: Component = () => {
     const current = connection();
     setRoomCodeInput(roomCode());
     setPinInput(current?.pin ?? "");
-    setEndpointInput(current?.endpointUrl || gameWsUrl());
+    setNameInput(current?.name ?? "");
   });
 
   const handleClassSelect = (event: Event) => {
@@ -741,12 +750,14 @@ const PlayerConnectionManager: Component = () => {
     event.preventDefault();
     const currentRoom = (roomCodeInput() || roomCode()).trim().toUpperCase();
     const pin = pinInput().trim();
-    const endpointUrl = endpointInput().trim() || gameWsUrl();
+    const name = nameInput().trim();
+    const endpointUrl = gameWsUrl();
 
     setConnection({
       endpointUrl,
       roomCode: currentRoom,
       pin,
+      name,
       classId: selectedClass(),
       status: "disconnected",
       error: null,
@@ -757,9 +768,18 @@ const PlayerConnectionManager: Component = () => {
     <Show when={shouldPrompt()}>
       <div class="fixed inset-0 z-40 grid place-items-center bg-black/80 p-6 backdrop-blur-sm">
         <form
-          class="w-full max-w-sm border border-zinc-700 bg-zinc-950 p-5 shadow-2xl"
+          class="relative w-full max-w-sm border border-zinc-700 bg-zinc-950 p-5 shadow-2xl"
           onSubmit={submitConnection}
         >
+          <button
+            type="button"
+            aria-label="Close join dialog"
+            title="Close"
+            class="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded bg-zinc-900 text-xl text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-white"
+            onClick={() => closeConnectionPrompt(appContext)}
+          >
+            <Icon icon="mdi:close" />
+          </button>
           <p class="text-xs uppercase tracking-[0.18em] text-zinc-600">
             Player Device
           </p>
@@ -771,6 +791,20 @@ const PlayerConnectionManager: Component = () => {
               {connection()?.error}
             </p>
           </Show>
+          <label class="mt-4 block text-sm font-semibold text-zinc-300">
+            Name
+            <input
+              class="mt-2 h-11 w-full rounded border border-zinc-700 bg-zinc-900 px-3 text-zinc-100"
+              value={nameInput()}
+              maxlength={40}
+              autocomplete="name"
+              onInput={(event) => {
+                const name = event.currentTarget.value;
+                setNameInput(name);
+                setConnection({ name });
+              }}
+            />
+          </label>
           <label class="mt-4 block text-sm font-semibold text-zinc-300">
             Room Code
             <input
@@ -793,15 +827,6 @@ const PlayerConnectionManager: Component = () => {
               required
               autofocus
               onInput={(event) => setPinInput(event.currentTarget.value)}
-            />
-          </label>
-          <label class="mt-4 block text-sm font-semibold text-zinc-300">
-            Server
-            <input
-              class="mt-2 h-11 w-full rounded border border-zinc-700 bg-zinc-900 px-3 text-sm text-zinc-100"
-              value={endpointInput()}
-              required
-              onInput={(event) => setEndpointInput(event.currentTarget.value)}
             />
           </label>
           <Button
@@ -1065,7 +1090,7 @@ const ConnectionStatusButton: Component = () => {
 
 const HeaderControls: Component = () => {
   const appContext = useContext(AppContext);
-  const [pendingAction, setPendingAction] = createSignal<"reset" | "device" | "leave" | null>(null);
+  const [confirmingLeave, setConfirmingLeave] = createSignal(false);
   const deviceMode = () => appContext?.contextValue().deviceMode;
   const roomCode = () => (
     deviceMode() === "player"
@@ -1073,79 +1098,15 @@ const HeaderControls: Component = () => {
       : appContext?.contextValue().gameScreenConnection.roomCode
   );
 
-  const resetDevice = () => {
-    if (!appContext) return;
-
-    if (deviceMode() === "player") {
-      appContext.setContextValue({
-        ...appContext.contextValue(),
-        selectedPlaybook: null,
-        playerHealth: 0,
-        playerProgressionChoices: [null, null, null],
-        playerConnection: {
-          ...appContext.contextValue().playerConnection,
-          classId: null,
-          error: null,
-        },
-      });
-      return;
-    }
-
-    if (deviceMode() === "gamesheet") {
-      appContext.setContextValue({
-        ...appContext.contextValue(),
-        entityPresence: 0,
-        entityResource: 0,
-        globalDoom: 0,
-        activeArcanaCards: [null, null],
-        activeEntityCard: null,
-        activeEntity: null,
-        drawnTarotCards: [null, null, null, null, null],
-        currentPhase: 0,
-      });
-    }
-  };
-
-  const changeDeviceType = () => {
-    if (!appContext) return;
-
-    appContext.setDeviceMode(null);
-  };
-
-  const confirmPendingAction = () => {
-    if (pendingAction() === "reset") resetDevice();
-    if (pendingAction() === "device") changeDeviceType();
-    if (pendingAction() === "leave") leaveRoom(appContext);
-    setPendingAction(null);
-  };
-
-  const resetMessage = () => (
-    deviceMode() === "player"
-      ? "The selected playbook, health, and progression choices will be cleared."
-      : "Drawn cards, Presence, resources, Doom, and active arcana will be cleared."
-  );
-
   return (
     <>
       <Switch>
         <Match when={deviceMode() !== null}>
           <div class="flex gap-2">
-            <Button
-              class="min-h-10 bg-red-900 px-3 text-xs uppercase tracking-[0.14em] hover:bg-red-800 disabled:hover:bg-red-900"
-              onClick={() => setPendingAction("reset")}
-            >
-              Reset
-            </Button>
-            <Button
-              class="min-h-10 bg-zinc-800 px-3 text-xs uppercase tracking-[0.14em] hover:bg-zinc-700 disabled:hover:bg-zinc-800"
-              onClick={() => setPendingAction("device")}
-            >
-              Device
-            </Button>
             <Show when={roomCode()}>
               <Button
                 class="min-h-10 bg-zinc-800 px-3 text-xs uppercase tracking-[0.14em] hover:bg-zinc-700 disabled:hover:bg-zinc-800"
-                onClick={() => setPendingAction("leave")}
+                onClick={() => setConfirmingLeave(true)}
               >
                 Leave
               </Button>
@@ -1154,38 +1115,18 @@ const HeaderControls: Component = () => {
         </Match>
       </Switch>
 
-      <Show when={pendingAction() === "reset"}>
-        <ConfirmDialog
-          eyebrow="Reset Sheet"
-          title={deviceMode() === "player" ? "Reset Player Sheet?" : "Reset Game Sheet?"}
-          message={resetMessage()}
-          confirmLabel="Reset"
-          destructive
-          onCancel={() => setPendingAction(null)}
-          onConfirm={confirmPendingAction}
-        />
-      </Show>
-
-      <Show when={pendingAction() === "device"}>
-        <ConfirmDialog
-          eyebrow="Device"
-          title="Return to Device Selection?"
-          message="Current sheet values will be kept."
-          confirmLabel="Continue"
-          onCancel={() => setPendingAction(null)}
-          onConfirm={confirmPendingAction}
-        />
-      </Show>
-
-      <Show when={pendingAction() === "leave"}>
+      <Show when={confirmingLeave()}>
         <ConfirmDialog
           eyebrow="Room"
           title="Leave Room?"
           message="This device will disconnect and release its room claim."
           confirmLabel="Leave"
           destructive
-          onCancel={() => setPendingAction(null)}
-          onConfirm={confirmPendingAction}
+          onCancel={() => setConfirmingLeave(false)}
+          onConfirm={() => {
+            leaveRoom(appContext);
+            setConfirmingLeave(false);
+          }}
         />
       </Show>
     </>
