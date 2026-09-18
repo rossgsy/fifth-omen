@@ -46,21 +46,21 @@ docker run --rm -p 8080:8080 rossgsy/fifth-omen-server:local
 ## Routes
 
 - `GET /healthz` returns a JSON health response.
-- `GET /admin/rooms` lists rooms with codes and PINs.
-- `POST /admin/rooms` creates a room.
-- `GET /admin/rooms/{code}` returns room state with the PIN.
-- `DELETE /admin/rooms/{code}` deletes a room.
+- `GET /admin/login` shows the admin login page.
+- `GET /admin/rooms` shows the admin room dashboard.
+- `POST /admin/rooms` creates a room from the dashboard form.
+- `POST /admin/rooms/{code}/delete` deletes a room from the dashboard.
 - `GET /ws` upgrades to a WebSocket connection for a room device.
 
-Admin routes use HTTP Basic Auth. The password is read from `ADMIN_PASSWORD`; the username can be any non-empty value.
+Admin routes use a signed session cookie. The login password is read from `ADMIN_PASSWORD`.
 
-Create a room:
+Open the dashboard:
 
 ```bash
-curl -u admin:change-me -X POST http://localhost:8080/admin/rooms \
-    -H 'Content-Type: application/json' \
-    -d '{"code":"TEST1","pin":"123456","maxSeats":6}'
+open http://localhost:8080/admin/login
 ```
+
+Room codes are 5 uppercase letters/numbers. PINs are 6 digits. If either field is blank while creating a room, the server generates it.
 
 Join over WebSocket:
 

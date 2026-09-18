@@ -1,14 +1,19 @@
 package httpapi
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/rossgsy/fifth-omen/server/internal/game"
-	"github.com/rossgsy/fifth-omen/server/internal/httperr"
 	"github.com/rossgsy/fifth-omen/server/internal/ws"
 )
 
@@ -17,10 +22,13 @@ func NewRouter(logger *log.Logger, manager *game.Manager, adminPassword string) 
 	admin := adminHandler(adminPassword)
 
 	mux.HandleFunc("/healthz", health)
-	mux.Handle("GET /admin/rooms", admin(listRooms(manager)))
+	mux.HandleFunc("GET /admin/login", adminLoginPage(adminPassword))
+	mux.HandleFunc("POST /admin/login", adminLogin(adminPassword))
+	mux.HandleFunc("POST /admin/logout", adminLogout)
+	mux.Handle("GET /admin", admin(adminRoomsPage(manager)))
+	mux.Handle("GET /admin/rooms", admin(adminRoomsPage(manager)))
 	mux.Handle("POST /admin/rooms", admin(createRoom(manager)))
-	mux.Handle("GET /admin/rooms/{code}", admin(getAdminRoom(manager)))
-	mux.Handle("DELETE /admin/rooms/{code}", admin(deleteRoom(manager)))
+	mux.Handle("POST /admin/rooms/{code}/delete", admin(deleteRoom(manager)))
 	mux.HandleFunc("/ws", ws.Handler(logger, manager))
 
 	return recoverer(logger, requestLogger(logger, mux))
@@ -33,98 +41,174 @@ func health(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-func listRooms(manager *game.Manager) http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(struct {
-			Rooms []game.AdminRoomSnapshot `json:"rooms"`
-		}{
+func adminLoginPage(adminPassword string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if adminPassword == "" {
+			renderAdminDisabled(w)
+			return
+		}
+		if validAdminSession(r, adminPassword) {
+			http.Redirect(w, r, "/admin/rooms", http.StatusSeeOther)
+			return
+		}
+
+		renderAdminLogin(w, r.URL.Query().Get("error") != "")
+	}
+}
+
+func adminLogin(adminPassword string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if adminPassword == "" {
+			renderAdminDisabled(w)
+			return
+		}
+
+		if err := r.ParseForm(); err != nil {
+			renderAdminLoginError(w, http.StatusBadRequest)
+			return
+		}
+
+		password := r.FormValue("password")
+		if subtle.ConstantTimeCompare([]byte(password), []byte(adminPassword)) != 1 {
+			http.Redirect(w, r, "/admin/login?error=1", http.StatusSeeOther)
+			return
+		}
+
+		setAdminSession(w, adminPassword)
+		http.Redirect(w, r, "/admin/rooms", http.StatusSeeOther)
+	}
+}
+
+func adminLogout(w http.ResponseWriter, r *http.Request) {
+	clearAdminSession(w)
+	http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+}
+
+func adminRoomsPage(manager *game.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		renderAdminRooms(w, adminRoomsView{
 			Rooms: manager.ListAdminRooms(),
+			Error: r.URL.Query().Get("error"),
 		})
 	}
 }
 
 func createRoom(manager *game.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req game.CreateRoomRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			httperr.Write(w, httperr.New(http.StatusBadRequest, "invalid_json", "Request body must be valid JSON"))
+		if err := r.ParseForm(); err != nil {
+			http.Redirect(w, r, "/admin/rooms?error=invalid_form", http.StatusSeeOther)
 			return
 		}
 
-		result, err := manager.CreateRoom(req)
+		maxSeats, _ := strconv.Atoi(r.FormValue("maxSeats"))
+		_, err := manager.CreateRoom(game.CreateRoomRequest{
+			Code:     r.FormValue("code"),
+			PIN:      r.FormValue("pin"),
+			MaxSeats: maxSeats,
+		})
 		if err != nil {
-			writeGameError(w, err)
+			http.Redirect(w, r, "/admin/rooms?error="+adminErrorCode(err), http.StatusSeeOther)
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(result)
-	}
-}
-
-func getAdminRoom(manager *game.Manager) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		snapshot, err := manager.AdminSnapshot(r.PathValue("code"))
-		if err != nil {
-			writeGameError(w, err)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(snapshot)
+		http.Redirect(w, r, "/admin/rooms", http.StatusSeeOther)
 	}
 }
 
 func deleteRoom(manager *game.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := manager.DeleteRoom(r.PathValue("code")); err != nil {
-			writeGameError(w, err)
+			http.Redirect(w, r, "/admin/rooms?error="+adminErrorCode(err), http.StatusSeeOther)
 			return
 		}
 
-		w.WriteHeader(http.StatusNoContent)
+		http.Redirect(w, r, "/admin/rooms", http.StatusSeeOther)
 	}
 }
 
-func adminHandler(adminPassword string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
+func adminHandler(adminPassword string) func(http.HandlerFunc) http.Handler {
+	return func(next http.HandlerFunc) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if adminPassword == "" {
-				httperr.Write(w, httperr.New(http.StatusServiceUnavailable, "admin_disabled", "Admin endpoints require ADMIN_PASSWORD"))
+				renderAdminDisabled(w)
 				return
 			}
 
-			username, password, ok := r.BasicAuth()
-			if !ok || username == "" || subtle.ConstantTimeCompare([]byte(password), []byte(adminPassword)) != 1 {
-				w.Header().Set("WWW-Authenticate", `Basic realm="fifth-omen-admin"`)
-				httperr.Write(w, httperr.New(http.StatusUnauthorized, "unauthorized", "Unauthorized"))
+			if !validAdminSession(r, adminPassword) {
+				http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
 				return
 			}
 
-			next.ServeHTTP(w, r)
+			next(w, r)
 		})
 	}
 }
 
-func writeGameError(w http.ResponseWriter, err error) {
+func setAdminSession(w http.ResponseWriter, adminPassword string) {
+	expires := time.Now().Add(24 * time.Hour)
+	value := adminSessionValue(adminPassword, expires.Unix())
+	http.SetCookie(w, &http.Cookie{
+		Name:     "fifth_omen_admin",
+		Value:    value,
+		Path:     "/admin",
+		Expires:  expires,
+		MaxAge:   int(time.Until(expires).Seconds()),
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func clearAdminSession(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "fifth_omen_admin",
+		Value:    "",
+		Path:     "/admin",
+		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func validAdminSession(r *http.Request, adminPassword string) bool {
+	cookie, err := r.Cookie("fifth_omen_admin")
+	if err != nil || cookie.Value == "" {
+		return false
+	}
+
+	parts := strings.Split(cookie.Value, ".")
+	if len(parts) != 2 {
+		return false
+	}
+
+	expiresUnix, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil || time.Now().Unix() > expiresUnix {
+		return false
+	}
+
+	expected := adminSessionValue(adminPassword, expiresUnix)
+	return subtle.ConstantTimeCompare([]byte(cookie.Value), []byte(expected)) == 1
+}
+
+func adminSessionValue(adminPassword string, expiresUnix int64) string {
+	expires := strconv.FormatInt(expiresUnix, 10)
+	mac := hmac.New(sha256.New, []byte(adminPassword))
+	mac.Write([]byte("fifth-omen-admin-session:" + expires))
+	signature := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	return expires + "." + signature
+}
+
+func adminErrorCode(err error) string {
 	switch {
 	case errors.Is(err, game.ErrRoomExists):
-		httperr.Write(w, httperr.New(http.StatusConflict, "room_exists", "Room already exists"))
+		return "room_exists"
 	case errors.Is(err, game.ErrInvalidRoomCode):
-		httperr.Write(w, httperr.New(http.StatusBadRequest, "invalid_room_code", "Room code must be 5 alphanumeric characters"))
-	case errors.Is(err, game.ErrRoomNotFound):
-		httperr.Write(w, httperr.New(http.StatusNotFound, "room_not_found", "Room not found"))
+		return "invalid_room_code"
 	case errors.Is(err, game.ErrInvalidPIN):
-		httperr.Write(w, httperr.New(http.StatusBadRequest, "invalid_pin", "PIN must be 6 digits"))
-	case errors.Is(err, game.ErrInvalidJoin), errors.Is(err, game.ErrInvalidRole):
-		httperr.Write(w, httperr.New(http.StatusBadRequest, "invalid_request", "Invalid request"))
-	case errors.Is(err, game.ErrRoomFull):
-		httperr.Write(w, httperr.New(http.StatusConflict, "room_full", "Room is full"))
-	case errors.Is(err, game.ErrReconnectNotFound):
-		httperr.Write(w, httperr.New(http.StatusNotFound, "reconnect_not_found", "Reconnect token not found"))
+		return "invalid_pin"
+	case errors.Is(err, game.ErrRoomNotFound):
+		return "room_not_found"
 	default:
-		httperr.Write(w, err)
+		return "unknown"
 	}
 }
