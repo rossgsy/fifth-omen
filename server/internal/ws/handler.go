@@ -41,6 +41,7 @@ func Handler(logger *log.Logger, manager *game.Manager) http.HandlerFunc {
 			OriginPatterns: []string{
 				"localhost:*",
 				"127.0.0.1:*",
+				"fifth-omen.lab-2.paleglyph.com",
 			},
 		})
 		if err != nil {
