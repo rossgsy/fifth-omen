@@ -1,0 +1,11 @@
+.gocache/
+.gomodcache/
+bin/
+dist/
+tmp/
+
+.git/
+.gitignore
+
+Dockerfile
+README.md
