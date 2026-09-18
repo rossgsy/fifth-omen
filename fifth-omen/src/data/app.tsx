@@ -1,11 +1,13 @@
 import { createContext, createSignal, JSX, Accessor } from "solid-js";
 
-export const AppContext = createContext<{
+export interface AppContextStore {
     contextValue: Accessor<AppContextValue>;
     setContextValue: (value: AppContextValue) => void;
     setSlotCard: (slotId: number, tarotNumber: number | null) => void;
     setDeviceMode: (mode: "player" | "gamesheet" | null) => void;
-}>();
+}
+
+export const AppContext = createContext<AppContextStore>();
 
 export interface AppContextValue {
     selectedPlaybook: number | null;
@@ -22,6 +24,41 @@ export interface AppContextValue {
     currentPhase: number;
     tarotSlots: TarotSlot[];
     deviceMode: "player" | "gamesheet" | null;
+    gameScreenConnection: GameScreenConnection;
+    playerConnection: PlayerConnection;
+    roomState: RoomState | null;
+}
+
+export type GameScreenConnectionStatus = "idle" | "connecting" | "connected" | "disconnected" | "error";
+
+export interface GameScreenConnection {
+    endpointUrl: string;
+    roomCode: string;
+    pin: string;
+    reconnectToken: string;
+    status: GameScreenConnectionStatus;
+    error: string | null;
+}
+
+export interface PlayerConnection {
+    endpointUrl: string;
+    roomCode: string;
+    pin: string;
+    classId: number | null;
+    status: GameScreenConnectionStatus;
+    error: string | null;
+}
+
+export interface RoomState {
+    code: string;
+    maxSeats: number;
+    gameScreens: number;
+    players: Array<{
+        seat: number;
+        deviceId: string;
+        classId?: number;
+        connected: boolean;
+    }>;
 }
 
 export interface TarotSlot {
@@ -52,6 +89,23 @@ const AppContextProvider = (props: AppContextProviderProps) => {
         drawnTarotCards: [null, null, null, null, null],
         currentPhase: 0,
         deviceMode: null,
+        gameScreenConnection: {
+            endpointUrl: "",
+            roomCode: "",
+            pin: "",
+            reconnectToken: "",
+            status: "idle",
+            error: null,
+        },
+        playerConnection: {
+            endpointUrl: "",
+            roomCode: "",
+            pin: "",
+            classId: null,
+            status: "idle",
+            error: null,
+        },
+        roomState: null,
         tarotSlots: [
             {
                 slotId: 0,
@@ -107,6 +161,23 @@ const AppContextProvider = (props: AppContextProviderProps) => {
             savedContext.playerProgressionChoices?.[1] ?? null,
             savedContext.playerProgressionChoices?.[2] ?? null,
         ],
+        gameScreenConnection: {
+            endpointUrl: savedContext.gameScreenConnection?.endpointUrl ?? "",
+            roomCode: savedContext.gameScreenConnection?.roomCode ?? "",
+            pin: savedContext.gameScreenConnection?.pin ?? "",
+            reconnectToken: savedContext.gameScreenConnection?.reconnectToken ?? "",
+            status: "idle",
+            error: null,
+        },
+        playerConnection: {
+            endpointUrl: savedContext.playerConnection?.endpointUrl ?? "",
+            roomCode: savedContext.playerConnection?.roomCode ?? "",
+            pin: savedContext.playerConnection?.pin ?? "",
+            classId: savedContext.playerConnection?.classId ?? savedContext.selectedPlaybook ?? null,
+            status: "idle",
+            error: null,
+        },
+        roomState: null,
         tarotSlots: savedContext.tarotSlots ?? initialContext.tarotSlots,
     };
 

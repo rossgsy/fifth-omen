@@ -7,18 +7,34 @@ import { Button, Page, Panel, SectionHeading } from "../components/ui";
 const PlaybookRoute = () => {
     const appContext = useContext(AppContext);
     const [pendingPlaybook, setPendingPlaybook] = createSignal<number | null>(null);
+    const claimedPlaybooks = () => new Set(
+        appContext?.contextValue().roomState?.players
+            .map((player) => player.classId)
+            .filter((classId): classId is number => typeof classId === "number") ?? []
+    );
+    const isClaimedByOtherDevice = (playbookIndex: number) => (
+        claimedPlaybooks().has(playbookIndex) && appContext?.contextValue().selectedPlaybook !== playbookIndex
+    );
 
     const selectPlaybook = () => {
         if (!appContext || pendingPlaybook() === null) return;
         const playbook = playbooks[pendingPlaybook()!];
         if (!playbook) return;
+        if (isClaimedByOtherDevice(pendingPlaybook()!)) return;
 
         appContext.setContextValue({
             ...appContext.contextValue(),
             selectedPlaybook: pendingPlaybook(),
             playerHealth: playbook.health,
             playerProgressionChoices: [null, null, null],
+            playerConnection: {
+                ...appContext.contextValue().playerConnection,
+                classId: pendingPlaybook(),
+            },
         });
+        window.dispatchEvent(new CustomEvent("fifth-omen:select-class", {
+            detail: { classId: pendingPlaybook() },
+        }));
         setPendingPlaybook(null);
     };
 
@@ -41,13 +57,23 @@ const PlaybookRoute = () => {
                             <For each={playbooks}>
                                 {(playbook, index) => (
                                     <Panel
-                                        interactive
-                                        class="p-4 text-left"
-                                        onClick={() => setPendingPlaybook(index())}
+                                        interactive={!isClaimedByOtherDevice(index())}
+                                        class={isClaimedByOtherDevice(index()) ? "p-4 text-left opacity-40" : "p-4 text-left"}
+                                        onClick={() => {
+                                            if (isClaimedByOtherDevice(index())) return;
+                                            setPendingPlaybook(index());
+                                        }}
                                     >
-                                        <p class="gothic-sub-heading text-2xl text-zinc-100">
-                                            {playbook.name}
-                                        </p>
+                                        <div class="flex flex-wrap items-start justify-between gap-3">
+                                            <p class="gothic-sub-heading text-2xl text-zinc-100">
+                                                {playbook.name}
+                                            </p>
+                                            <Show when={isClaimedByOtherDevice(index())}>
+                                                <span class="border border-zinc-800 px-2 py-1 text-[0.65rem] uppercase tracking-[0.16em] text-zinc-500">
+                                                    Taken
+                                                </span>
+                                            </Show>
+                                        </div>
                                         <p class="mt-2 text-sm uppercase tracking-[0.18em] text-zinc-600">
                                             Health {playbook.health}
                                         </p>

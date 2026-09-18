@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -22,7 +23,8 @@ type ServerMessage struct {
 }
 
 type ClientMessage struct {
-	Type string `json:"type"`
+	Type    string `json:"type"`
+	ClassID *int   `json:"classId,omitempty"`
 }
 
 type client struct {
@@ -62,18 +64,25 @@ func Handler(logger *log.Logger, manager *game.Manager) http.HandlerFunc {
 		})
 
 		go c.writeLoop(r.Context())
-		c.readLoop(r.Context())
+		c.readLoop(r.Context(), manager, join.Session.ID)
 	}
 }
 
 func joinRequest(r *http.Request) game.JoinRequest {
 	query := r.URL.Query()
-	return game.JoinRequest{
+	req := game.JoinRequest{
 		RoomCode:       query.Get("room"),
 		PIN:            query.Get("pin"),
 		Role:           query.Get("role"),
 		ReconnectToken: query.Get("reconnect_token"),
 	}
+	if classValue := query.Get("class"); classValue != "" {
+		classID, err := strconv.Atoi(classValue)
+		if err == nil {
+			req.ClassID = &classID
+		}
+	}
+	return req
 }
 
 func newClient(conn *websocket.Conn, logger *log.Logger) *client {
@@ -111,7 +120,7 @@ func (c *client) closeWithError(status websocket.StatusCode, reason string) {
 	})
 }
 
-func (c *client) readLoop(ctx context.Context) {
+func (c *client) readLoop(ctx context.Context, manager *game.Manager, sessionID string) {
 	for {
 		var msg ClientMessage
 		if err := wsjson.Read(ctx, c.conn, &msg); err != nil {
@@ -124,6 +133,26 @@ func (c *client) readLoop(ctx context.Context) {
 
 		if msg.Type == "ping" {
 			c.Send(ServerMessage{Type: "pong"})
+		}
+		if msg.Type == "select_class" && msg.ClassID != nil {
+			room, err := manager.ClaimClass(sessionID, *msg.ClassID)
+			if err != nil {
+				c.Send(ServerMessage{
+					Type: "error",
+					Data: map[string]string{
+						"code":    errorCode(err),
+						"message": err.Error(),
+					},
+				})
+				continue
+			}
+			c.Send(ServerMessage{
+				Type: "class_selected",
+				Data: map[string]any{
+					"classId": *msg.ClassID,
+					"room":    room,
+				},
+			})
 		}
 	}
 }
@@ -150,7 +179,7 @@ func (c *client) writeLoop(ctx context.Context) {
 
 func closeStatus(err error) websocket.StatusCode {
 	switch {
-	case errors.Is(err, game.ErrInvalidPIN), errors.Is(err, game.ErrReconnectNotFound):
+	case errors.Is(err, game.ErrInvalidPIN), errors.Is(err, game.ErrReconnectNotFound), errors.Is(err, game.ErrClassTaken), errors.Is(err, game.ErrInvalidClass):
 		return websocket.StatusPolicyViolation
 	case errors.Is(err, game.ErrRoomNotFound):
 		return websocket.StatusUnsupportedData
@@ -158,5 +187,16 @@ func closeStatus(err error) websocket.StatusCode {
 		return websocket.StatusTryAgainLater
 	default:
 		return websocket.StatusInvalidFramePayloadData
+	}
+}
+
+func errorCode(err error) string {
+	switch {
+	case errors.Is(err, game.ErrClassTaken):
+		return "class_taken"
+	case errors.Is(err, game.ErrInvalidClass):
+		return "invalid_class"
+	default:
+		return "unknown"
 	}
 }

@@ -29,6 +29,14 @@ It correctly bundles Solid in production mode and optimizes the build for the be
 The build is minified and the filenames include the hashes.<br>
 Your app is ready to be deployed!
 
+### Game Server Connection
+
+Game screen mode connects to the same-origin `/ws` endpoint by default. Override it at build time with:
+
+```bash
+VITE_GAME_WS_URL=ws://localhost:8080/ws npm run build
+```
+
 ## Deployment
 
 You can deploy the `dist` folder to any static host provider (netlify, surge, now, etc.)

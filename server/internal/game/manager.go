@@ -35,6 +35,7 @@ type Room struct {
 	MaxSeats    int
 	players     map[int]*Player
 	playerToken map[string]*Player
+	playerClass map[int]*Player
 	screens     map[string]*GameScreen
 }
 
@@ -42,6 +43,7 @@ type Player struct {
 	Seat      int    `json:"seat"`
 	DeviceID  string `json:"deviceId"`
 	Token     string `json:"-"`
+	ClassID   *int   `json:"classId,omitempty"`
 	Connected bool   `json:"connected"`
 	sender    Sender
 }
@@ -59,6 +61,7 @@ type Session struct {
 	Role           string `json:"role"`
 	DeviceID       string `json:"deviceId"`
 	Seat           *int   `json:"seat,omitempty"`
+	ClassID        *int   `json:"classId,omitempty"`
 	ReconnectToken string `json:"reconnectToken"`
 	sender         Sender
 }
@@ -79,6 +82,7 @@ type JoinRequest struct {
 	PIN            string
 	Role           string
 	ReconnectToken string
+	ClassID        *int
 }
 
 type JoinResult struct {
@@ -103,6 +107,7 @@ type AdminRoomSnapshot struct {
 type PlayerSnapshot struct {
 	Seat      int    `json:"seat"`
 	DeviceID  string `json:"deviceId"`
+	ClassID   *int   `json:"classId,omitempty"`
 	Connected bool   `json:"connected"`
 }
 
@@ -167,6 +172,7 @@ func (m *Manager) CreateRoom(req CreateRoomRequest) (CreateRoomResult, error) {
 		MaxSeats:    maxSeats,
 		players:     make(map[int]*Player),
 		playerToken: make(map[string]*Player),
+		playerClass: make(map[int]*Player),
 		screens:     make(map[string]*GameScreen),
 	}
 	m.rooms[code] = room
@@ -215,7 +221,7 @@ func (m *Manager) Join(req JoinRequest, sender Sender) (JoinResult, error) {
 		return JoinResult{}, ErrInvalidPIN
 	}
 
-	result, err := m.joinLocked(room, role, strings.TrimSpace(req.ReconnectToken), sender)
+	result, err := m.joinLocked(room, role, strings.TrimSpace(req.ReconnectToken), req.ClassID, sender)
 	if err != nil {
 		m.mu.Unlock()
 		return JoinResult{}, err
@@ -255,6 +261,11 @@ func (m *Manager) Leave(sessionID string) {
 		if session.Seat != nil {
 			if player := room.players[*session.Seat]; player != nil && player.Token == session.ReconnectToken {
 				if player.sender != session.sender {
+					break
+				}
+				if player.ClassID == nil {
+					delete(room.players, player.Seat)
+					delete(room.playerToken, player.Token)
 					break
 				}
 				player.Connected = false
@@ -341,10 +352,52 @@ func (m *Manager) DeleteRoom(roomCode string) error {
 	return nil
 }
 
-func (m *Manager) joinLocked(room *Room, role string, reconnectToken string, sender Sender) (JoinResult, error) {
+func (m *Manager) ClaimClass(sessionID string, classID int) (RoomSnapshot, error) {
+	if classID < 0 {
+		return RoomSnapshot{}, ErrInvalidClass
+	}
+
+	m.mu.Lock()
+	session := m.sessions[sessionID]
+	if session == nil || session.Role != RolePlayer || session.Seat == nil {
+		m.mu.Unlock()
+		return RoomSnapshot{}, ErrInvalidJoin
+	}
+	room := m.rooms[session.RoomCode]
+	if room == nil {
+		m.mu.Unlock()
+		return RoomSnapshot{}, ErrRoomNotFound
+	}
+	player := room.players[*session.Seat]
+	if player == nil || player.Token != session.ReconnectToken {
+		m.mu.Unlock()
+		return RoomSnapshot{}, ErrInvalidJoin
+	}
+	if existing := room.playerClass[classID]; existing != nil && existing != player {
+		m.mu.Unlock()
+		return RoomSnapshot{}, ErrClassTaken
+	}
+
+	if player.ClassID != nil {
+		delete(room.playerClass, *player.ClassID)
+	}
+	classCopy := classID
+	player.ClassID = &classCopy
+	session.ClassID = &classCopy
+	room.playerClass[classID] = player
+
+	snapshot := room.snapshot()
+	senders := room.senders()
+	m.mu.Unlock()
+
+	broadcast(senders, RoomEvent{Type: "room_state", Room: snapshot})
+	return snapshot, nil
+}
+
+func (m *Manager) joinLocked(room *Room, role string, reconnectToken string, classID *int, sender Sender) (JoinResult, error) {
 	switch role {
 	case RolePlayer:
-		return room.joinPlayer(reconnectToken, sender)
+		return room.joinPlayer(reconnectToken, classID, sender)
 	case RoleGameScreen:
 		return room.joinGameScreen(reconnectToken, sender)
 	default:
@@ -352,9 +405,18 @@ func (m *Manager) joinLocked(room *Room, role string, reconnectToken string, sen
 	}
 }
 
-func (r *Room) joinPlayer(reconnectToken string, sender Sender) (JoinResult, error) {
+func (r *Room) joinPlayer(reconnectToken string, classID *int, sender Sender) (JoinResult, error) {
 	reconnected := false
-	player := r.playerToken[reconnectToken]
+	var player *Player
+	if classID != nil {
+		if *classID < 0 {
+			return JoinResult{}, ErrInvalidClass
+		}
+		player = r.playerClass[*classID]
+	}
+	if player == nil {
+		player = r.playerToken[reconnectToken]
+	}
 	if reconnectToken != "" && player == nil {
 		return JoinResult{}, ErrReconnectNotFound
 	}
@@ -379,6 +441,11 @@ func (r *Room) joinPlayer(reconnectToken string, sender Sender) (JoinResult, err
 			Token:    token,
 			DeviceID: deviceID,
 		}
+		if classID != nil {
+			classCopy := *classID
+			player.ClassID = &classCopy
+			r.playerClass[classCopy] = player
+		}
 		r.players[seat] = player
 		r.playerToken[token] = player
 	} else {
@@ -400,6 +467,7 @@ func (r *Room) joinPlayer(reconnectToken string, sender Sender) (JoinResult, err
 		Role:           RolePlayer,
 		DeviceID:       player.DeviceID,
 		Seat:           &seat,
+		ClassID:        copyInt(player.ClassID),
 		ReconnectToken: player.Token,
 		sender:         sender,
 	}
@@ -481,6 +549,7 @@ func (r *Room) snapshot() RoomSnapshot {
 		players = append(players, PlayerSnapshot{
 			Seat:      player.Seat,
 			DeviceID:  player.DeviceID,
+			ClassID:   copyInt(player.ClassID),
 			Connected: player.Connected,
 		})
 	}
@@ -536,6 +605,14 @@ func broadcast(senders []Sender, event RoomEvent) {
 	for _, sender := range senders {
 		sender.Send(event)
 	}
+}
+
+func copyInt(value *int) *int {
+	if value == nil {
+		return nil
+	}
+	copy := *value
+	return &copy
 }
 
 func normalizeRoomCode(code string) string {

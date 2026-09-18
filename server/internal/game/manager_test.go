@@ -16,7 +16,7 @@ func (s *testSender) Close(string) {
 	s.closed = true
 }
 
-func TestPlayerSeatsAreAllocatedAndReservedForReconnect(t *testing.T) {
+func TestPlayerClassIsReservedAndReconnects(t *testing.T) {
 	manager := NewManager()
 	if _, err := manager.CreateRoom(CreateRoomRequest{
 		Code:     "abc12",
@@ -39,6 +39,14 @@ func TestPlayerSeatsAreAllocatedAndReservedForReconnect(t *testing.T) {
 		t.Fatalf("first player seat = %v, want 0", first.Session.Seat)
 	}
 
+	snapshot, err := manager.ClaimClass(first.Session.ID, 2)
+	if err != nil {
+		t.Fatalf("claim class: %v", err)
+	}
+	if snapshot.Players[0].ClassID == nil || *snapshot.Players[0].ClassID != 2 {
+		t.Fatalf("claimed class = %v, want 2", snapshot.Players[0].ClassID)
+	}
+
 	second, err := manager.Join(JoinRequest{
 		RoomCode: "abc12",
 		PIN:      "123456",
@@ -50,24 +58,20 @@ func TestPlayerSeatsAreAllocatedAndReservedForReconnect(t *testing.T) {
 	if second.Session.Seat == nil || *second.Session.Seat != 1 {
 		t.Fatalf("second player seat = %v, want 1", second.Session.Seat)
 	}
-
-	if _, err := manager.Join(JoinRequest{
-		RoomCode: "ABC12",
-		PIN:      "123456",
-		Role:     RolePlayer,
-	}, &testSender{}); err != ErrRoomFull {
-		t.Fatalf("join full room error = %v, want %v", err, ErrRoomFull)
+	if _, err := manager.ClaimClass(second.Session.ID, 2); err != ErrClassTaken {
+		t.Fatalf("claim taken class error = %v, want %v", err, ErrClassTaken)
 	}
 
 	reconnectSender := &testSender{}
+	classID := 2
 	reconnect, err := manager.Join(JoinRequest{
-		RoomCode:       "ABC12",
-		PIN:            "123456",
-		Role:           RolePlayer,
-		ReconnectToken: first.Session.ReconnectToken,
+		RoomCode: "ABC12",
+		PIN:      "123456",
+		Role:     RolePlayer,
+		ClassID:  &classID,
 	}, reconnectSender)
 	if err != nil {
-		t.Fatalf("reconnect first player: %v", err)
+		t.Fatalf("reconnect class player: %v", err)
 	}
 	if !reconnect.Reconnected {
 		t.Fatal("reconnect result was not marked as reconnected")
@@ -80,7 +84,7 @@ func TestPlayerSeatsAreAllocatedAndReservedForReconnect(t *testing.T) {
 	}
 
 	manager.Leave(first.Session.ID)
-	snapshot, err := manager.Snapshot("ABC12")
+	snapshot, err = manager.Snapshot("ABC12")
 	if err != nil {
 		t.Fatalf("snapshot after old leave: %v", err)
 	}

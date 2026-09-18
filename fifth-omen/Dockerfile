@@ -5,7 +5,9 @@ WORKDIR /app
 # allow toggling source map generation at build time
 ARG ENABLE_SOURCE_MAPS=true
 ARG MODE=dev
+ARG VITE_GAME_WS_URL=
 ENV ENABLE_SOURCE_MAPS=false
+ENV VITE_GAME_WS_URL=${VITE_GAME_WS_URL}
 
 # enable corepack and pnpm (lockfile is pnpm-lock.yaml)
 RUN corepack enable && corepack prepare pnpm@latest --activate

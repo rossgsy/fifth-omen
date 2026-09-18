@@ -8,6 +8,8 @@ var (
 	ErrInvalidRoomCode   = errors.New("invalid room code")
 	ErrInvalidPIN        = errors.New("invalid pin")
 	ErrInvalidRole       = errors.New("invalid role")
+	ErrInvalidClass      = errors.New("invalid class")
+	ErrClassTaken        = errors.New("class already taken")
 	ErrRoomExists        = errors.New("room already exists")
 	ErrRoomNotFound      = errors.New("room not found")
 	ErrRoomFull          = errors.New("room is full")

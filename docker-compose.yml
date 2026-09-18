@@ -7,6 +7,8 @@ services:
     image: "rossgsy/fifth-omen-app:local"
     networks:
       - traefik
+    environment:
+      - VITE_GAME_WS_URL=ws://server.fifth-omen.lab-2.paleglyph.com:8080/ws
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik"
@@ -15,3 +17,17 @@ services:
       - "traefik.http.routers.fifth-omen-app.tls=true"
       - "traefik.http.routers.fifth-omen-app.tls.certresolver=zerossl"
       - "traefik.http.services.fifth-omen-app.loadbalancer.server.port=80"
+  server:
+    image: "rossgsy/fifth-omen-server:local"
+    networks:
+      - traefik
+    environment:
+      - ADMIN_PASSWORD=ross123
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
+      - "traefik.http.routers.fifth-omen-server.entrypoints=https"
+      - "traefik.http.routers.fifth-omen-server.rule=Host(`server.fifth-omen.lab-2.paleglyph.com`)"
+      - "traefik.http.routers.fifth-omen-server.tls=true"
+      - "traefik.http.routers.fifth-omen-server.tls.certresolver=zerossl"
+      - "traefik.http.services.fifth-omen-server.loadbalancer.server.port=8080"
