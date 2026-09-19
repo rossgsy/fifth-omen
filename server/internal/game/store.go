@@ -25,6 +25,7 @@ type StoredPlayer struct {
 	Seat     int    `json:"seat"`
 	DeviceID string `json:"deviceId"`
 	Token    string `json:"token"`
+	Name     string `json:"name"`
 	ClassID  *int   `json:"classId,omitempty"`
 }
 
@@ -44,6 +45,7 @@ func (r *Room) stored() StoredRoom {
 			Seat:     player.Seat,
 			DeviceID: player.DeviceID,
 			Token:    player.Token,
+			Name:     player.Name,
 			ClassID:  copyInt(player.ClassID),
 		})
 	}
@@ -112,6 +114,7 @@ func roomFromStored(stored StoredRoom) (*Room, error) {
 			Seat:      storedPlayer.Seat,
 			DeviceID:  storedPlayer.DeviceID,
 			Token:     storedPlayer.Token,
+			Name:      storedPlayer.Name,
 			ClassID:   copyInt(storedPlayer.ClassID),
 			Connected: false,
 		}

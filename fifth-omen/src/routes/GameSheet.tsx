@@ -1,4 +1,5 @@
 import { For, Show, createMemo, createSignal, useContext } from "solid-js";
+import { Icon } from "@iconify-icon/solid";
 import { Button, ConfirmDialog, Page, Panel, SectionHeading } from "../components/ui";
 import { AppContext } from "../data/app";
 import {
@@ -9,6 +10,7 @@ import {
     lookup_encounter_for_card,
     lookup_entity_key_for_card,
     number_to_numeral,
+    playbooks,
 } from "../game";
 
 const DRAW_STEPS: Array<{ title: string; kind: "Entity" | "Encounter" }> = [
@@ -202,6 +204,62 @@ const EntityReferenceList = (props: {
     </section>
 );
 
+const PlayerRoster = () => {
+    const appContext = useContext(AppContext);
+    const players = createMemo(() => appContext?.contextValue().roomState?.players ?? []);
+    const playbookForPlayer = (player: { classId?: number; playbookId?: number }) => {
+        const playbookId = player.playbookId ?? player.classId;
+        return typeof playbookId === "number" ? playbooks[playbookId] ?? null : null;
+    };
+
+    return (
+        <aside class="grid content-start gap-2 border border-zinc-800 p-2">
+            <p class="text-center text-xs uppercase tracking-[0.18em] text-zinc-600">
+                Players
+            </p>
+            <div class="grid grid-cols-2 gap-2 md:grid-cols-1">
+                <For
+                    each={players()}
+                    fallback={
+                        <div class="grid aspect-square place-items-center border border-dashed border-zinc-800 p-2 text-center text-xs leading-snug text-zinc-600">
+                            No players
+                        </div>
+                    }
+                >
+                    {(player) => {
+                        const playbook = () => playbookForPlayer(player);
+                        const playerName = () => player.name?.trim() || `Seat ${player.seat + 1}`;
+                        const playbookName = () => playbook()?.name ?? "No Playbook";
+                        const icon = () => playbook()?.icon || "mdi:account-question";
+
+                        return (
+                            <div class={player.connected
+                                ? "grid aspect-square grid-rows-[auto_1fr_auto] place-items-center gap-1 border border-zinc-700 bg-zinc-950 p-2 text-center"
+                                : "grid aspect-square grid-rows-[auto_1fr_auto] place-items-center gap-1 border border-zinc-800 bg-zinc-950/70 p-2 text-center opacity-60"}
+                            >
+                                <Icon icon={icon()} class="text-4xl text-zinc-100" />
+                                <div class="grid min-h-0 content-center gap-1">
+                                    <p class="gothic-sub-heading line-clamp-2 text-sm leading-tight text-zinc-100">
+                                        {playbookName()}
+                                    </p>
+                                    <p class="line-clamp-2 text-xs leading-tight text-zinc-400">
+                                        {playerName()}
+                                    </p>
+                                </div>
+                                <Show when={!player.connected}>
+                                    <span class="text-[0.62rem] uppercase tracking-[0.16em] text-zinc-600">
+                                        Offline
+                                    </span>
+                                </Show>
+                            </div>
+                        );
+                    }}
+                </For>
+            </div>
+        </aside>
+    );
+};
+
 const GameSheetRoute = () => {
     const appContext = useContext(AppContext);
     const [pendingCard, setPendingCard] = createSignal<number | null>(null);
@@ -322,8 +380,11 @@ const GameSheetRoute = () => {
     };
 
     return (
-        <Page class="gap-2 p-2">    
-            <div class="grid gap-2 md:grid-cols-[14rem_14rem_minmax(0,1fr)] md:items-stretch">
+        <Page class="gap-2 p-2">
+            <div class="grid min-h-0 grow gap-2 md:grid-cols-[9.5rem_minmax(0,1fr)]">
+                <PlayerRoster />
+                <div class="flex min-h-0 flex-col gap-2">
+                    <div class="grid gap-2 md:grid-cols-[14rem_14rem_minmax(0,1fr)] md:items-stretch">
                 <section class="border border-zinc-800 p-2">
                     <CompactStepperTracker
                         label="Doom"
@@ -570,6 +631,8 @@ const GameSheetRoute = () => {
                     onConfirm={completePhase}
                 />
             </Show>
+                </div>
+            </div>
         </Page>
     );
 };

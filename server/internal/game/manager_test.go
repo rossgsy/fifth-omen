@@ -45,7 +45,7 @@ func (s *memoryRoomStore) DeleteRoom(_ context.Context, code string) error {
 	return nil
 }
 
-func TestPlayerClassIsReleasedOnDisconnect(t *testing.T) {
+func TestPlayerDisconnectPreservesClassUntilExplicitLeave(t *testing.T) {
 	manager := NewManager()
 	if _, err := manager.CreateRoom(CreateRoomRequest{
 		Code:     "abc12",
@@ -57,9 +57,10 @@ func TestPlayerClassIsReleasedOnDisconnect(t *testing.T) {
 
 	firstSender := &testSender{}
 	first, err := manager.Join(JoinRequest{
-		RoomCode: "ABC12",
-		PIN:      "123456",
-		Role:     RolePlayer,
+		RoomCode:   "ABC12",
+		PIN:        "123456",
+		Role:       RolePlayer,
+		PlayerName: "Mara",
 	}, firstSender)
 	if err != nil {
 		t.Fatalf("join first player: %v", err)
@@ -74,6 +75,9 @@ func TestPlayerClassIsReleasedOnDisconnect(t *testing.T) {
 	}
 	if snapshot.Players[0].ClassID == nil || *snapshot.Players[0].ClassID != 2 {
 		t.Fatalf("claimed class = %v, want 2", snapshot.Players[0].ClassID)
+	}
+	if snapshot.Players[0].Name != "Mara" || snapshot.Players[0].PlaybookID == nil || *snapshot.Players[0].PlaybookID != 2 {
+		t.Fatalf("snapshot player = %+v, want name Mara and playbook 2", snapshot.Players[0])
 	}
 
 	second, err := manager.Join(JoinRequest{
@@ -96,11 +100,33 @@ func TestPlayerClassIsReleasedOnDisconnect(t *testing.T) {
 	if err != nil {
 		t.Fatalf("snapshot after leave: %v", err)
 	}
-	if len(snapshot.Players) != 1 {
-		t.Fatalf("players after leave = %d, want 1", len(snapshot.Players))
+	if len(snapshot.Players) != 2 {
+		t.Fatalf("players after disconnect = %d, want 2", len(snapshot.Players))
 	}
-	if snapshot.Players[0].Seat != 1 {
-		t.Fatalf("remaining player seat = %d, want 1", snapshot.Players[0].Seat)
+	if snapshot.Players[0].Connected {
+		t.Fatal("disconnected player should remain in room but not be connected")
+	}
+
+	if _, err := manager.ClaimClass(second.Session.ID, 2); err != ErrClassTaken {
+		t.Fatalf("claim disconnected player's class error = %v, want %v", err, ErrClassTaken)
+	}
+
+	firstReconnected, err := manager.Join(JoinRequest{
+		RoomCode:       "abc12",
+		PIN:            "123456",
+		Role:           RolePlayer,
+		ReconnectToken: first.Session.ReconnectToken,
+	}, &testSender{})
+	if err != nil {
+		t.Fatalf("reconnect first player: %v", err)
+	}
+	manager.ReleaseSession(firstReconnected.Session.ID)
+	snapshot, err = manager.Snapshot("ABC12")
+	if err != nil {
+		t.Fatalf("snapshot after explicit leave: %v", err)
+	}
+	if len(snapshot.Players) != 1 || snapshot.Players[0].Seat != 1 {
+		t.Fatalf("players after explicit leave = %+v, want only seat 1", snapshot.Players)
 	}
 
 	snapshot, err = manager.ClaimClass(second.Session.ID, 2)
@@ -212,7 +238,7 @@ func TestManagerLoadsPersistedRooms(t *testing.T) {
 		t.Fatalf("create room: %v", err)
 	}
 
-	player, err := manager.Join(JoinRequest{RoomCode: "LOAD1", PIN: "123456", Role: RolePlayer}, &testSender{})
+	player, err := manager.Join(JoinRequest{RoomCode: "LOAD1", PIN: "123456", Role: RolePlayer, PlayerName: "Iris"}, &testSender{})
 	if err != nil {
 		t.Fatalf("join player: %v", err)
 	}
@@ -248,6 +274,9 @@ func TestManagerLoadsPersistedRooms(t *testing.T) {
 	}
 	if snapshot.Players[0].ClassID == nil || *snapshot.Players[0].ClassID != 4 {
 		t.Fatalf("reloaded class = %v, want 4", snapshot.Players[0].ClassID)
+	}
+	if snapshot.Players[0].Name != "Iris" || snapshot.Players[0].PlaybookID == nil || *snapshot.Players[0].PlaybookID != 4 {
+		t.Fatalf("reloaded player = %+v, want name Iris and playbook 4", snapshot.Players[0])
 	}
 	if snapshot.GameScreens != 0 {
 		t.Fatalf("reloaded connected game screens = %d, want 0", snapshot.GameScreens)

@@ -60,7 +60,9 @@ export interface RoomState {
     players: Array<{
         seat: number;
         deviceId: string;
+        name: string;
         classId?: number;
+        playbookId?: number;
         connected: boolean;
     }>;
 }

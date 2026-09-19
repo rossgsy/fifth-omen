@@ -62,6 +62,7 @@ type Player struct {
 	Seat      int    `json:"seat"`
 	DeviceID  string `json:"deviceId"`
 	Token     string `json:"-"`
+	Name      string `json:"name"`
 	ClassID   *int   `json:"classId,omitempty"`
 	Connected bool   `json:"connected"`
 	sender    Sender
@@ -126,10 +127,12 @@ type AdminRoomSnapshot struct {
 }
 
 type PlayerSnapshot struct {
-	Seat      int    `json:"seat"`
-	DeviceID  string `json:"deviceId"`
-	ClassID   *int   `json:"classId,omitempty"`
-	Connected bool   `json:"connected"`
+	Seat       int    `json:"seat"`
+	DeviceID   string `json:"deviceId"`
+	Name       string `json:"name"`
+	ClassID    *int   `json:"classId,omitempty"`
+	PlaybookID *int   `json:"playbookId,omitempty"`
+	Connected  bool   `json:"connected"`
 }
 
 type RoomEvent struct {
@@ -269,7 +272,7 @@ func (m *Manager) Join(req JoinRequest, sender Sender) (JoinResult, error) {
 		return JoinResult{}, ErrInvalidPIN
 	}
 
-	result, err := m.joinLocked(room, role, strings.TrimSpace(req.ReconnectToken), req.ClassID, sender)
+	result, err := m.joinLocked(room, role, strings.TrimSpace(req.ReconnectToken), strings.TrimSpace(req.PlayerName), req.ClassID, sender)
 	if err != nil {
 		m.mu.Unlock()
 		return JoinResult{}, err
@@ -316,7 +319,8 @@ func (m *Manager) Leave(sessionID string) {
 				if player.sender != session.sender {
 					break
 				}
-				room.releasePlayer(player)
+				player.Connected = false
+				player.sender = nil
 			}
 		}
 	case RoleGameScreen:
@@ -535,10 +539,10 @@ func (m *Manager) deleteRoomLocked(code string) error {
 	return m.store.DeleteRoom(context.Background(), code)
 }
 
-func (m *Manager) joinLocked(room *Room, role string, reconnectToken string, classID *int, sender Sender) (JoinResult, error) {
+func (m *Manager) joinLocked(room *Room, role string, reconnectToken string, playerName string, classID *int, sender Sender) (JoinResult, error) {
 	switch role {
 	case RolePlayer:
-		return room.joinPlayer(reconnectToken, classID, sender)
+		return room.joinPlayer(reconnectToken, playerName, classID, sender)
 	case RoleGameScreen:
 		return room.joinGameScreen(reconnectToken, sender)
 	default:
@@ -546,7 +550,7 @@ func (m *Manager) joinLocked(room *Room, role string, reconnectToken string, cla
 	}
 }
 
-func (r *Room) joinPlayer(reconnectToken string, classID *int, sender Sender) (JoinResult, error) {
+func (r *Room) joinPlayer(reconnectToken string, playerName string, classID *int, sender Sender) (JoinResult, error) {
 	reconnected := false
 	var player *Player
 	if classID != nil {
@@ -581,6 +585,7 @@ func (r *Room) joinPlayer(reconnectToken string, classID *int, sender Sender) (J
 			Seat:     seat,
 			Token:    token,
 			DeviceID: deviceID,
+			Name:     playerName,
 		}
 		if classID != nil {
 			classCopy := *classID
@@ -591,6 +596,9 @@ func (r *Room) joinPlayer(reconnectToken string, classID *int, sender Sender) (J
 		r.state.playerToken[token] = player
 	} else {
 		reconnected = true
+	}
+	if playerName != "" {
+		player.Name = playerName
 	}
 
 	replaced := player.sender
@@ -696,10 +704,12 @@ func (r *Room) snapshot() RoomSnapshot {
 			continue
 		}
 		players = append(players, PlayerSnapshot{
-			Seat:      player.Seat,
-			DeviceID:  player.DeviceID,
-			ClassID:   copyInt(player.ClassID),
-			Connected: player.Connected,
+			Seat:       player.Seat,
+			DeviceID:   player.DeviceID,
+			Name:       player.Name,
+			ClassID:    copyInt(player.ClassID),
+			PlaybookID: copyInt(player.ClassID),
+			Connected:  player.Connected,
 		})
 	}
 

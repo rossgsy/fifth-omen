@@ -34,6 +34,7 @@ export interface Action {
 
 export interface Playbook {
     name: string;
+    icon: string;
     description: string;
     health: number;
     draftAbility: string;
