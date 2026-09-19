@@ -7,10 +7,7 @@ import { Button, Page, Panel, SectionHeading } from "../components/ui";
 import PlayerHeader from "../components/playbook/PlayerHeader";
 import PickRitualCard from "../components/playbook/Step/PickRitualCard";
 import WaitingForOthers from "../components/playbook/Step/WaitingForOthers";
-
-const BEGIN_GAME_EVENT = "fifth-omen:begin-game";
-const UPDATE_GLOBAL_STATE_EVENT = "fifth-omen:update-global-state";
-const RESOLVE_RITUAL_PHASE_EVENT = "fifth-omen:resolve-ritual-phase";
+import { useNetwork } from "../data/network";
 
 const clampTracker = (value: number) => Math.max(0, Math.min(10, value));
 
@@ -49,6 +46,7 @@ const TrackerControl = (props: {
 
 const PlaybookRoute = () => {
     const appContext = useContext(AppContext);
+    const network = useNetwork();
     const [pendingPlaybook, setPendingPlaybook] = createSignal<number | null>(null);
     const [pendingRitualCard, setPendingRitualCard] = createSignal<number | null>(null);
     const selectedSeat = () => appContext?.contextValue().playerConnection.seat ?? null;
@@ -72,9 +70,7 @@ const PlaybookRoute = () => {
         return state.steps[state.currentStep] ?? null;
     };
     const updateGlobalTracker = (key: "doom" | "ward", value: number) => {
-        window.dispatchEvent(new CustomEvent(UPDATE_GLOBAL_STATE_EVENT, {
-            detail: { [key]: value },
-        }));
+        network?.setGlobalState({ [key]: value });
     };
     const GlobalTrackerControls = () => (
         <div class="grid gap-2 sm:grid-cols-2">
@@ -124,39 +120,13 @@ const PlaybookRoute = () => {
         const playbook = playbooks[pendingPlaybook()!];
         if (!playbook) return;
         if (isClaimedByOtherDevice(pendingPlaybook()!)) return;
-
-        appContext.setContextValue({
-            ...appContext.contextValue(),
-            selectedPlaybook: pendingPlaybook(),
-            playerHealth: playbook.health,
-            playerProgressionChoices: [null, null, null],
-            playerConnection: {
-                ...appContext.contextValue().playerConnection,
-                classId: pendingPlaybook(),
-                error: null,
-            },
-        });
-        window.dispatchEvent(new CustomEvent("fifth-omen:select-class", {
-            detail: { classId: pendingPlaybook() },
-        }));
+        network?.selectClass(pendingPlaybook()!);
         setPendingPlaybook(null);
     };
 
     const selectSeat = (seat: number) => {
         if (!appContext) return;
-        appContext.setContextValue({
-            ...appContext.contextValue(),
-            selectedPlaybook: null,
-            playerConnection: {
-                ...appContext.contextValue().playerConnection,
-                seat,
-                classId: null,
-                error: null,
-            },
-        });
-        window.dispatchEvent(new CustomEvent("fifth-omen:select-seat", {
-            detail: { seat },
-        }));
+        network?.selectSeat(seat);
     };
 
     createEffect(() => {
@@ -262,7 +232,7 @@ const PlaybookRoute = () => {
                             />
                             <Button
                                 class="min-h-12 bg-zinc-100 uppercase tracking-[0.16em] text-zinc-950 hover:bg-zinc-300"
-                                onClick={() => window.dispatchEvent(new Event(RESOLVE_RITUAL_PHASE_EVENT))}
+                                onClick={() => network?.resolveRitualPhase()}
                             >
                                 Complete {currentRitualStep()?.kind ?? "Phase"}
                             </Button>

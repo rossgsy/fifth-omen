@@ -3,11 +3,11 @@ import { For, useContext, createSignal } from "solid-js";
 import { MajorArcana, number_to_numeral } from "../../../game";
 import { AppContext } from "../../../data/app";
 import { Button } from "../../ui";
-
-const REVEAL_RITUAL_CARD_EVENT = "fifth-omen:reveal-ritual-card";
+import { useNetwork } from "../../../data/network";
 
 const PickRitualCard = () => {
     const appContext = useContext(AppContext);
+    const network = useNetwork();
 
     const ritual = () => appContext?.contextValue().roomState?.ritual ?? null;
     const currentRitualStep = () => {
@@ -48,9 +48,7 @@ const PickRitualCard = () => {
             disabled={selectedCard() === null}
             onClick={() => {
                 if (selectedCard() === null) return;
-                window.dispatchEvent(new CustomEvent(REVEAL_RITUAL_CARD_EVENT, {
-                    detail: { tarotNumber: selectedCard() },
-                }));
+                network?.revealRitualCard(selectedCard()!);
                 setSelectedCard(null);
             }}
         >
