@@ -10,6 +10,8 @@ var (
 	ErrInvalidRole       = errors.New("invalid role")
 	ErrInvalidClass      = errors.New("invalid class")
 	ErrInvalidGameState  = errors.New("invalid game state")
+	ErrInvalidSeat       = errors.New("invalid seat")
+	ErrSeatOccupied      = errors.New("seat is occupied")
 	ErrClassTaken        = errors.New("class already taken")
 	ErrRoomExists        = errors.New("room already exists")
 	ErrRoomNotFound      = errors.New("room not found")

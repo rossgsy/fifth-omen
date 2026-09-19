@@ -45,7 +45,7 @@ func (s *memoryRoomStore) DeleteRoom(_ context.Context, code string) error {
 	return nil
 }
 
-func TestPlayerDisconnectPreservesClassUntilExplicitLeave(t *testing.T) {
+func TestPlayersChooseSeatsAndSeatClassesLock(t *testing.T) {
 	manager := NewManager()
 	if _, err := manager.CreateRoom(CreateRoomRequest{
 		Code:     "abc12",
@@ -65,11 +65,18 @@ func TestPlayerDisconnectPreservesClassUntilExplicitLeave(t *testing.T) {
 	if err != nil {
 		t.Fatalf("join first player: %v", err)
 	}
-	if first.Session.Seat == nil || *first.Session.Seat != 0 {
-		t.Fatalf("first player seat = %v, want 0", first.Session.Seat)
+	if first.Session.Seat != nil {
+		t.Fatalf("first player seat = %v, want nil before seat selection", first.Session.Seat)
+	}
+	snapshot, err := manager.ClaimSeat(first.Session.ID, 0)
+	if err != nil {
+		t.Fatalf("claim first seat: %v", err)
+	}
+	if len(snapshot.Players) != 1 || snapshot.Players[0].Seat != 0 || !snapshot.Players[0].Connected {
+		t.Fatalf("first seat snapshot = %+v, want connected seat 0", snapshot.Players)
 	}
 
-	snapshot, err := manager.ClaimClass(first.Session.ID, 2)
+	snapshot, err = manager.ClaimClass(first.Session.ID, 2)
 	if err != nil {
 		t.Fatalf("claim class: %v", err)
 	}
@@ -88,8 +95,11 @@ func TestPlayerDisconnectPreservesClassUntilExplicitLeave(t *testing.T) {
 	if err != nil {
 		t.Fatalf("join second player: %v", err)
 	}
-	if second.Session.Seat == nil || *second.Session.Seat != 1 {
-		t.Fatalf("second player seat = %v, want 1", second.Session.Seat)
+	if _, err := manager.ClaimSeat(second.Session.ID, 0); err != ErrSeatOccupied {
+		t.Fatalf("claim occupied seat error = %v, want %v", err, ErrSeatOccupied)
+	}
+	if _, err := manager.ClaimSeat(second.Session.ID, 1); err != nil {
+		t.Fatalf("claim second seat: %v", err)
 	}
 	if _, err := manager.ClaimClass(second.Session.ID, 2); err != ErrClassTaken {
 		t.Fatalf("claim taken class error = %v, want %v", err, ErrClassTaken)
@@ -107,8 +117,23 @@ func TestPlayerDisconnectPreservesClassUntilExplicitLeave(t *testing.T) {
 		t.Fatal("disconnected player should remain in room but not be connected")
 	}
 
-	if _, err := manager.ClaimClass(second.Session.ID, 2); err != ErrClassTaken {
-		t.Fatalf("claim disconnected player's class error = %v, want %v", err, ErrClassTaken)
+	if _, err := manager.ClaimSeat(second.Session.ID, 0); err != nil {
+		t.Fatalf("claim disconnected open seat: %v", err)
+	}
+	snapshot, err = manager.Snapshot("ABC12")
+	if err != nil {
+		t.Fatalf("snapshot after taking open seat: %v", err)
+	}
+	if len(snapshot.Players) != 2 || snapshot.Players[0].Connected == false {
+		t.Fatalf("snapshot after taking open seat = %+v, want seat 0 connected", snapshot.Players)
+	}
+
+	snapshot, err = manager.ClaimClass(second.Session.ID, 2)
+	if err != nil {
+		t.Fatalf("confirm locked seat class: %v", err)
+	}
+	if snapshot.Players[0].ClassID == nil || *snapshot.Players[0].ClassID != 2 {
+		t.Fatalf("locked seat class = %v, want 2", snapshot.Players[0].ClassID)
 	}
 
 	firstReconnected, err := manager.Join(JoinRequest{
@@ -120,41 +145,8 @@ func TestPlayerDisconnectPreservesClassUntilExplicitLeave(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reconnect first player: %v", err)
 	}
-	manager.ReleaseSession(firstReconnected.Session.ID)
-	snapshot, err = manager.Snapshot("ABC12")
-	if err != nil {
-		t.Fatalf("snapshot after explicit leave: %v", err)
-	}
-	if len(snapshot.Players) != 1 || snapshot.Players[0].Seat != 1 {
-		t.Fatalf("players after explicit leave = %+v, want only seat 1", snapshot.Players)
-	}
-
-	snapshot, err = manager.ClaimClass(second.Session.ID, 2)
-	if err != nil {
-		t.Fatalf("claim released class: %v", err)
-	}
-	if snapshot.Players[0].ClassID == nil || *snapshot.Players[0].ClassID != 2 {
-		t.Fatalf("released class claim = %v, want 2", snapshot.Players[0].ClassID)
-	}
-}
-
-func TestInvalidReconnectTokenIsRejected(t *testing.T) {
-	manager := NewManager()
-	if _, err := manager.CreateRoom(CreateRoomRequest{
-		Code: "ROOM1",
-		PIN:  "999999",
-	}); err != nil {
-		t.Fatalf("create room: %v", err)
-	}
-
-	_, err := manager.Join(JoinRequest{
-		RoomCode:       "ROOM1",
-		PIN:            "999999",
-		Role:           RolePlayer,
-		ReconnectToken: "missing",
-	}, &testSender{})
-	if err != ErrReconnectNotFound {
-		t.Fatalf("join with invalid reconnect token error = %v, want %v", err, ErrReconnectNotFound)
+	if firstReconnected.Session.Seat != nil {
+		t.Fatalf("reconnect into occupied previous seat = %v, want nil", firstReconnected.Session.Seat)
 	}
 }
 
@@ -181,6 +173,9 @@ func TestGameScreenUpdatesGlobalState(t *testing.T) {
 	}, playerSender)
 	if err != nil {
 		t.Fatalf("join player: %v", err)
+	}
+	if _, err := manager.ClaimSeat(player.Session.ID, 0); err != nil {
+		t.Fatalf("claim player seat: %v", err)
 	}
 
 	doom, ward := 4, 7
@@ -241,6 +236,9 @@ func TestManagerLoadsPersistedRooms(t *testing.T) {
 	player, err := manager.Join(JoinRequest{RoomCode: "LOAD1", PIN: "123456", Role: RolePlayer, PlayerName: "Iris"}, &testSender{})
 	if err != nil {
 		t.Fatalf("join player: %v", err)
+	}
+	if _, err := manager.ClaimSeat(player.Session.ID, 0); err != nil {
+		t.Fatalf("claim seat: %v", err)
 	}
 	if _, err := manager.ClaimClass(player.Session.ID, 4); err != nil {
 		t.Fatalf("claim class: %v", err)

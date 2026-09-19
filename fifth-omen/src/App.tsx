@@ -8,6 +8,7 @@ import { ActionCard, Button, ConfirmDialog } from './components/ui';
 import { Icon } from '@iconify-icon/solid';
 import QRCode from 'qrcode';
 import { gameWsUrl } from './config/server';
+import { playbooks } from './game';
 
 type FullscreenDocument = Document & {
   webkitFullscreenElement?: Element | null;
@@ -41,6 +42,33 @@ const clearedPlayerState = (value: ReturnType<AppContextStore["contextValue"]>) 
 
 const DeviceMenu: Component = () => {
   const appContext = useContext(AppContext);
+  const canRejoin = () => Boolean(
+    appContext?.contextValue().playerConnection.roomCode &&
+    appContext?.contextValue().playerConnection.reconnectToken
+  );
+  const rejoinLabel = () => {
+    const connection = appContext?.contextValue().playerConnection;
+    const name = connection?.name?.trim() || "Player";
+    const seat = typeof connection?.seat === "number" ? `Seat ${connection.seat + 1}` : "Choose a seat";
+    return `${name} / ${seat}`;
+  };
+
+  const rejoinLastGame = () => {
+    if (!appContext || !canRejoin()) return;
+    const current = appContext.contextValue();
+    appContext.setContextValue({
+      ...clearedPlayerState(current),
+      roomState: null,
+      deviceMode: "player",
+      playerConnection: {
+        ...current.playerConnection,
+        endpointUrl: current.playerConnection.endpointUrl || gameWsUrl(),
+        pin: "",
+        status: "disconnected",
+        error: null,
+      },
+    });
+  };
 
   const startPlayerJoin = () => {
     if (!appContext) return;
@@ -53,6 +81,8 @@ const DeviceMenu: Component = () => {
         ...appContext.contextValue().playerConnection,
         roomCode: "",
         pin: "",
+        reconnectToken: "",
+        seat: null,
         classId: null,
         status: "idle",
         error: null,
@@ -78,6 +108,17 @@ const DeviceMenu: Component = () => {
   };
 
   return <div class="flex flex-col min-h-100 grow p-4 justify-center gap-3">
+    <Show when={canRejoin()}>
+      <ActionCard
+        eyebrow="Last Game"
+        title="Rejoin"
+        onClick={rejoinLastGame}
+      >
+        <p class="mt-2 text-sm uppercase tracking-[0.18em] text-zinc-600">
+          {rejoinLabel()}
+        </p>
+      </ActionCard>
+    </Show>
     <ActionCard
       eyebrow="Personal"
       title="Player Sheet"
@@ -110,6 +151,7 @@ const DeviceBootstrap: Component = () => {
         ...baseValue.playerConnection,
         roomCode: room,
         pin: "",
+        seat: null,
         classId: null,
         status: "idle",
         error: null,
@@ -251,6 +293,8 @@ const closeConnectionPrompt = (appContext: AppContextStore | undefined) => {
       roomCode: "",
       pin: "",
       name: baseValue.playerConnection.name,
+      reconnectToken: baseValue.playerConnection.reconnectToken,
+      seat: null,
       classId: null,
       status: "idle",
       error: null,
@@ -430,7 +474,7 @@ const GameScreenConnectionManager: Component = () => {
     }
 
     const current = connection();
-    if (!current || current.status === "connected" || current.status === "connecting") return;
+    if (!current || current.status !== "disconnected") return;
 
     connect();
   });
@@ -563,10 +607,10 @@ const PlayerConnectionManager: Component = () => {
   const roomFromUrl = roomCodeFromUrl;
   const roomCode = () => connection()?.roomCode || roomFromUrl();
   const selectedClass = () => appContext?.contextValue().selectedPlaybook ?? connection()?.classId ?? null;
-  const hasCredentials = () => Boolean(roomCode() && connection()?.pin);
+  const hasCredentials = () => Boolean(roomCode() && (connection()?.pin || connection()?.reconnectToken));
   const shouldPrompt = () => {
     const current = connection();
-    return !roomCode() || !current?.pin || current.status === "error";
+    return !roomCode() || (!current?.pin && !current?.reconnectToken) || current.status === "error";
   };
 
   const setConnection = (value: Partial<PlayerConnection>) => {
@@ -586,7 +630,7 @@ const PlayerConnectionManager: Component = () => {
   const connect = () => {
     const current = connection();
     const currentRoom = roomCode();
-    if (!currentRoom || !current?.pin) return;
+    if (!currentRoom || (!current?.pin && !current?.reconnectToken)) return;
 
     closeSocket();
     manuallyClosed = false;
@@ -595,21 +639,24 @@ const PlayerConnectionManager: Component = () => {
     const endpointUrl = current.endpointUrl || gameWsUrl();
     const url = normalizeWsUrl(endpointUrl);
     url.searchParams.set("room", currentRoom);
-    url.searchParams.set("pin", current.pin);
+    if (current.pin) {
+      url.searchParams.set("pin", current.pin);
+    }
     url.searchParams.set("role", "player");
     const playerName = current.name.trim();
     if (playerName) {
       url.searchParams.set("name", playerName);
     }
-    const classID = selectedClass();
-    if (classID !== null) {
-      url.searchParams.set("class", String(classID));
+    if (current.reconnectToken) {
+      url.searchParams.set("reconnect_token", current.reconnectToken);
+    }
+    if (current.seat !== null) {
+      url.searchParams.set("seat", String(current.seat));
     }
 
     setConnection({
       endpointUrl,
       roomCode: currentRoom,
-      classId: classID,
       status: "connecting",
       error: null,
     });
@@ -639,6 +686,34 @@ const PlayerConnectionManager: Component = () => {
         updateRoomState(appContext, parseRoomState(message.room ?? message.data?.room));
         return;
       }
+      if (message.type === "seat_selected") {
+        const seat = typeof message.data?.seat === "number" ? message.data.seat : null;
+        const reconnectToken = typeof message.data?.reconnectToken === "string"
+          ? message.data.reconnectToken
+          : connection()?.reconnectToken ?? "";
+        const room = parseRoomState(message.data?.room);
+        updateRoomState(appContext, room);
+        const slot = seat !== null ? room?.players.find((player) => player.seat === seat) : null;
+        const classId = typeof slot?.classId === "number" ? slot.classId : null;
+        if (classId !== null && appContext) {
+          const playbook = playbooks[classId];
+          appContext.setContextValue({
+            ...appContext.contextValue(),
+            selectedPlaybook: classId,
+            playerHealth: playbook?.health ?? appContext.contextValue().playerHealth,
+            playerConnection: {
+              ...appContext.contextValue().playerConnection,
+              reconnectToken,
+              seat,
+              classId,
+              error: null,
+            },
+          });
+        } else {
+          setConnection({ reconnectToken, seat, classId: null, error: null });
+        }
+        return;
+      }
       if (message.type === "class_selected") {
         const classId = typeof message.data?.classId === "number" ? message.data.classId : selectedClass();
         updateRoomState(appContext, parseRoomState(message.data?.room));
@@ -647,6 +722,13 @@ const PlayerConnectionManager: Component = () => {
       }
       if (message.type === "error") {
         const code = message.data?.code;
+        if (code === "seat_occupied" || code === "invalid_seat") {
+          setConnection({
+            seat: null,
+            error: message.data?.message || "That seat is not available.",
+          });
+          return;
+        }
         if (code === "class_taken" || code === "invalid_class") {
           setConnection({
             error: message.data?.message || "That class is not available.",
@@ -665,8 +747,33 @@ const PlayerConnectionManager: Component = () => {
       joined = true;
       if (joinTimer) window.clearTimeout(joinTimer);
       joinTimer = undefined;
-      updateRoomState(appContext, parseRoomState(message.data?.room));
+      const room = parseRoomState(message.data?.room);
+      updateRoomState(appContext, room);
+      const session = message.data?.session;
+      const seat = typeof session?.seat === "number" ? session.seat : null;
+      const classId = typeof session?.classId === "number" ? session.classId : null;
+      const reconnectToken = typeof session?.reconnectToken === "string" ? session.reconnectToken : current.reconnectToken;
+      if (classId !== null && appContext) {
+        const playbook = playbooks[classId];
+        appContext.setContextValue({
+          ...appContext.contextValue(),
+          selectedPlaybook: classId,
+          playerHealth: playbook?.health ?? appContext.contextValue().playerHealth,
+          playerConnection: {
+            ...appContext.contextValue().playerConnection,
+            reconnectToken,
+            seat,
+            classId,
+            status: "connected",
+            error: null,
+          },
+        });
+        return;
+      }
       setConnection({
+        reconnectToken,
+        seat,
+        classId,
         status: "connected",
         error: null,
       });
@@ -683,6 +790,7 @@ const PlayerConnectionManager: Component = () => {
         setConnection({
           status: "error",
           error: connectionFailureMessage(event),
+          pin: "",
         });
         return;
       }
@@ -716,7 +824,7 @@ const PlayerConnectionManager: Component = () => {
     }
 
     const current = connection();
-    if (!current || current.status === "connected" || current.status === "connecting") return;
+    if (!current || current.status !== "disconnected") return;
     connect();
   });
 
@@ -736,12 +844,23 @@ const PlayerConnectionManager: Component = () => {
     }
   };
 
+  const handleSeatSelect = (event: Event) => {
+    const seat = (event as CustomEvent<{ seat: number }>).detail?.seat;
+    if (typeof seat !== "number") return;
+    setConnection({ seat });
+    if (socket?.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: "select_seat", seat }));
+    }
+  };
+
   onMount(() => {
     window.addEventListener("fifth-omen:select-class", handleClassSelect);
+    window.addEventListener("fifth-omen:select-seat", handleSeatSelect);
   });
 
   onCleanup(() => {
     window.removeEventListener("fifth-omen:select-class", handleClassSelect);
+    window.removeEventListener("fifth-omen:select-seat", handleSeatSelect);
     closeSocket();
   });
 
@@ -772,6 +891,8 @@ const PlayerConnectionManager: Component = () => {
       roomCode: currentRoom,
       pin,
       name,
+      reconnectToken: "",
+      seat: null,
       classId: selectedClass(),
       status: "disconnected",
       error: null,

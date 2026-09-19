@@ -44,6 +44,8 @@ export interface PlayerConnection {
     roomCode: string;
     pin: string;
     name: string;
+    reconnectToken: string;
+    seat: number | null;
     classId: number | null;
     status: GameScreenConnectionStatus;
     error: string | null;
@@ -80,9 +82,18 @@ export interface AppContextProviderProps {
 
 const ROOM_ID_STORAGE_KEY = "room_id";
 const PLAYER_NAME_STORAGE_KEY = "player_name";
+const PLAYER_RECONNECT_TOKEN_STORAGE_KEY = "player_reconnect_token";
+const PLAYER_SEAT_STORAGE_KEY = "player_seat";
 
 const readRoomID = () => window.localStorage.getItem(ROOM_ID_STORAGE_KEY) ?? "";
 const readPlayerName = () => window.localStorage.getItem(PLAYER_NAME_STORAGE_KEY) ?? "";
+const readPlayerReconnectToken = () => window.localStorage.getItem(PLAYER_RECONNECT_TOKEN_STORAGE_KEY) ?? "";
+const readPlayerSeat = () => {
+    const value = window.localStorage.getItem(PLAYER_SEAT_STORAGE_KEY);
+    if (value === null) return null;
+    const seat = Number(value);
+    return Number.isInteger(seat) && seat >= 0 ? seat : null;
+};
 
 const persistAllowedState = (value: AppContextValue) => {
     window.localStorage.removeItem("appContext");
@@ -101,6 +112,19 @@ const persistAllowedState = (value: AppContextValue) => {
     } else {
         window.localStorage.removeItem(PLAYER_NAME_STORAGE_KEY);
     }
+
+    const playerReconnectToken = value.playerConnection.reconnectToken.trim();
+    if (playerReconnectToken) {
+        window.localStorage.setItem(PLAYER_RECONNECT_TOKEN_STORAGE_KEY, playerReconnectToken);
+    } else {
+        window.localStorage.removeItem(PLAYER_RECONNECT_TOKEN_STORAGE_KEY);
+    }
+
+    if (typeof value.playerConnection.seat === "number") {
+        window.localStorage.setItem(PLAYER_SEAT_STORAGE_KEY, String(value.playerConnection.seat));
+    } else {
+        window.localStorage.removeItem(PLAYER_SEAT_STORAGE_KEY);
+    }
 };
 
 const AppContextProvider = (props: AppContextProviderProps) => {
@@ -108,6 +132,8 @@ const AppContextProvider = (props: AppContextProviderProps) => {
     window.localStorage.removeItem("selected_sheet");
     const storedRoomID = readRoomID();
     const storedPlayerName = readPlayerName();
+    const storedPlayerReconnectToken = readPlayerReconnectToken();
+    const storedPlayerSeat = readPlayerSeat();
     let initialContext: AppContextValue = {
         selectedPlaybook: null,
         playerHealth: 0,
@@ -135,6 +161,8 @@ const AppContextProvider = (props: AppContextProviderProps) => {
             roomCode: storedRoomID,
             pin: "",
             name: storedPlayerName,
+            reconnectToken: storedPlayerReconnectToken,
+            seat: storedPlayerSeat,
             classId: null,
             status: "idle",
             error: null,

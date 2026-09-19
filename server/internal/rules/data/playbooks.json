@@ -1,7 +1,7 @@
 [
   {
     "name": "The Exorcist",
-    "icon": "game-icons:holy-symbol",
+    "icon": "game-icons:abstract-005",
     "description": "",
     "health": 6,
     "draftAbility": "After the second draft pass, you may swap one of your dice with one die belonging to another player. That player may accept or refuse.",
@@ -77,7 +77,7 @@
   },
   {
     "name": "The Medium",
-    "icon": "game-icons:crystal-ball",
+    "icon": "game-icons:abstract-006",
     "description": "",
     "health": 6,
     "draftAbility": "During the first draft, the Medium may ask the group one yes/no question about the draft. Each other player may answer only yes or no.",
@@ -153,7 +153,7 @@
   },
   {
     "name": "The Warden",
-    "icon": "game-icons:shield",
+    "icon": "game-icons:abstract-041",
     "description": "",
     "health": 8,
     "draftAbility": "immediately after another player makes their first draft, the Warden may choose a die from the pool as that player’s second die. That player may accept or refuse it. If accepted, they take it immediately and are skipped during the second draft pass.",

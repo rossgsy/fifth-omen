@@ -207,50 +207,51 @@ const EntityReferenceList = (props: {
 const PlayerRoster = () => {
     const appContext = useContext(AppContext);
     const players = createMemo(() => appContext?.contextValue().roomState?.players ?? []);
-    const playbookForPlayer = (player: { classId?: number; playbookId?: number }) => {
-        const playbookId = player.playbookId ?? player.classId;
-        return typeof playbookId === "number" ? playbooks[playbookId] ?? null : null;
-    };
+    const seats = createMemo(() => {
+        const maxSeats = appContext?.contextValue().roomState?.maxSeats ?? 6;
+        return Array.from({ length: maxSeats }, (_, seat) => {
+            const player = players().find((item) => item.seat === seat) ?? null;
+            const playbookId = player?.playbookId ?? player?.classId;
+            const playbook = typeof playbookId === "number" ? playbooks[playbookId] ?? null : null;
+            return { seat, player, playbook };
+        });
+    });
 
     return (
         <aside class="grid content-start gap-2 border border-zinc-800 p-2">
             <p class="text-center text-xs uppercase tracking-[0.18em] text-zinc-600">
-                Players
+                Seats
             </p>
             <div class="grid grid-cols-2 gap-2 md:grid-cols-1">
-                <For
-                    each={players()}
-                    fallback={
-                        <div class="grid aspect-square place-items-center border border-dashed border-zinc-800 p-2 text-center text-xs leading-snug text-zinc-600">
-                            No players
-                        </div>
-                    }
-                >
-                    {(player) => {
-                        const playbook = () => playbookForPlayer(player);
-                        const playerName = () => player.name?.trim() || `Seat ${player.seat + 1}`;
-                        const playbookName = () => playbook()?.name ?? "No Playbook";
-                        const icon = () => playbook()?.icon || "mdi:account-question";
+                <For each={seats()}>
+                    {(seat) => {
+                        const player = () => seat.player;
+                        const playbook = () => seat.playbook;
+                        const seatLabel = () => `Seat ${seat.seat + 1}`;
+                        const icon = () => playbook()?.icon || "mdi:seat";
+                        const status = () => player()?.connected
+                            ? "Occupied"
+                            : playbook()
+                                ? "Open"
+                                : "Empty";
 
                         return (
-                            <div class={player.connected
+                            <div class={player()?.connected
                                 ? "grid aspect-square grid-rows-[auto_1fr_auto] place-items-center gap-1 border border-zinc-700 bg-zinc-950 p-2 text-center"
                                 : "grid aspect-square grid-rows-[auto_1fr_auto] place-items-center gap-1 border border-zinc-800 bg-zinc-950/70 p-2 text-center opacity-60"}
                             >
                                 <Icon icon={icon()} class="text-4xl text-zinc-100" />
                                 <div class="grid min-h-0 content-center gap-1">
-                                    <p class="gothic-sub-heading line-clamp-2 text-sm leading-tight text-zinc-100">
-                                        {playbookName()}
+                                    <p class="text-xs uppercase tracking-[0.16em] text-zinc-600">
+                                        {seatLabel()}
                                     </p>
-                                    <p class="line-clamp-2 text-xs leading-tight text-zinc-400">
-                                        {playerName()}
+                                    <p class="gothic-sub-heading line-clamp-2 text-sm leading-tight text-zinc-100">
+                                        {playbook()?.name ?? "Open"}
                                     </p>
                                 </div>
-                                <Show when={!player.connected}>
-                                    <span class="text-[0.62rem] uppercase tracking-[0.16em] text-zinc-600">
-                                        Offline
-                                    </span>
-                                </Show>
+                                <span class="text-[0.62rem] uppercase tracking-[0.16em] text-zinc-600">
+                                    {status()}
+                                </span>
                             </div>
                         );
                     }}

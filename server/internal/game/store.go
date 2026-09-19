@@ -79,6 +79,8 @@ func roomFromStored(stored StoredRoom) (*Room, error) {
 	}
 	if stored.MaxSeats <= 0 {
 		stored.MaxSeats = DefaultMaxSeats
+	} else if stored.MaxSeats > MaxSeatsLimit {
+		stored.MaxSeats = MaxSeatsLimit
 	}
 	if !validTracker(&stored.Global.Doom) || !validTracker(&stored.Global.Ward) {
 		return nil, fmt.Errorf("%w: stored room %s has invalid global state", ErrInvalidRoom, code)

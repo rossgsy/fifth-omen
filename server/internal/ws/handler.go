@@ -25,6 +25,7 @@ type ServerMessage struct {
 type ClientMessage struct {
 	Type    string `json:"type"`
 	ClassID *int   `json:"classId,omitempty"`
+	Seat    *int   `json:"seat,omitempty"`
 	Doom    *int   `json:"doom,omitempty"`
 	Ward    *int   `json:"ward,omitempty"`
 }
@@ -86,6 +87,12 @@ func joinRequest(r *http.Request) game.JoinRequest {
 			req.ClassID = &classID
 		}
 	}
+	if seatValue := query.Get("seat"); seatValue != "" {
+		seat, err := strconv.Atoi(seatValue)
+		if err == nil {
+			req.Seat = &seat
+		}
+	}
 	return req
 }
 
@@ -142,6 +149,27 @@ func (c *client) readLoop(ctx context.Context, manager *game.Manager, sessionID 
 			manager.ReleaseSession(sessionID)
 			c.Close("left room")
 			return
+		}
+		if msg.Type == "select_seat" && msg.Seat != nil {
+			room, err := manager.ClaimSeat(sessionID, *msg.Seat)
+			if err != nil {
+				c.Send(ServerMessage{
+					Type: "error",
+					Data: map[string]string{
+						"code":    errorCode(err),
+						"message": err.Error(),
+					},
+				})
+				continue
+			}
+			c.Send(ServerMessage{
+				Type: "seat_selected",
+				Data: map[string]any{
+					"seat":           *msg.Seat,
+					"reconnectToken": manager.SessionReconnectToken(sessionID),
+					"room":           room,
+				},
+			})
 		}
 		if msg.Type == "select_class" && msg.ClassID != nil {
 			room, err := manager.ClaimClass(sessionID, *msg.ClassID)
@@ -205,6 +233,8 @@ func closeStatus(err error) websocket.StatusCode {
 	switch {
 	case errors.Is(err, game.ErrInvalidPIN), errors.Is(err, game.ErrReconnectNotFound), errors.Is(err, game.ErrClassTaken), errors.Is(err, game.ErrInvalidClass):
 		return websocket.StatusPolicyViolation
+	case errors.Is(err, game.ErrSeatOccupied):
+		return websocket.StatusTryAgainLater
 	case errors.Is(err, game.ErrRoomNotFound):
 		return websocket.StatusUnsupportedData
 	case errors.Is(err, game.ErrRoomFull):
@@ -220,6 +250,10 @@ func errorCode(err error) string {
 		return "class_taken"
 	case errors.Is(err, game.ErrInvalidClass):
 		return "invalid_class"
+	case errors.Is(err, game.ErrInvalidSeat):
+		return "invalid_seat"
+	case errors.Is(err, game.ErrSeatOccupied):
+		return "seat_occupied"
 	case errors.Is(err, game.ErrInvalidGameState):
 		return "invalid_game_state"
 	default:

@@ -14,7 +14,8 @@ const (
 	RoleGameScreen = "gamescreen"
 	RolePlayer     = "player"
 
-	DefaultMaxSeats = 8
+	DefaultMaxSeats = 6
+	MaxSeatsLimit   = 6
 	RoomCodeLength  = 5
 	PINLength       = 6
 )
@@ -83,6 +84,7 @@ type Session struct {
 	Seat           *int   `json:"seat,omitempty"`
 	ClassID        *int   `json:"classId,omitempty"`
 	ReconnectToken string `json:"reconnectToken"`
+	PlayerName     string `json:"playerName,omitempty"`
 	sender         Sender
 }
 
@@ -104,6 +106,7 @@ type JoinRequest struct {
 	ReconnectToken string
 	PlayerName     string
 	ClassID        *int
+	Seat           *int
 }
 
 type JoinResult struct {
@@ -195,6 +198,8 @@ func (m *Manager) CreateRoom(req CreateRoomRequest) (CreateRoomResult, error) {
 	maxSeats := req.MaxSeats
 	if maxSeats <= 0 {
 		maxSeats = DefaultMaxSeats
+	} else if maxSeats > MaxSeatsLimit {
+		maxSeats = MaxSeatsLimit
 	}
 
 	m.mu.Lock()
@@ -252,7 +257,7 @@ func (m *Manager) Join(req JoinRequest, sender Sender) (JoinResult, error) {
 	role := strings.ToLower(strings.TrimSpace(req.Role))
 	pin := strings.TrimSpace(req.PIN)
 
-	if roomCode == "" || pin == "" || sender == nil {
+	if roomCode == "" || sender == nil {
 		return JoinResult{}, ErrInvalidJoin
 	}
 	if role != RoleGameScreen && role != RolePlayer {
@@ -267,12 +272,17 @@ func (m *Manager) Join(req JoinRequest, sender Sender) (JoinResult, error) {
 		m.mu.Unlock()
 		return JoinResult{}, ErrRoomNotFound
 	}
-	if room.PIN != pin {
+	if pin == "" {
+		if role != RolePlayer || req.ReconnectToken == "" || room.state.playerToken[strings.TrimSpace(req.ReconnectToken)] == nil {
+			m.mu.Unlock()
+			return JoinResult{}, ErrInvalidPIN
+		}
+	} else if room.PIN != pin {
 		m.mu.Unlock()
 		return JoinResult{}, ErrInvalidPIN
 	}
 
-	result, err := m.joinLocked(room, role, strings.TrimSpace(req.ReconnectToken), strings.TrimSpace(req.PlayerName), req.ClassID, sender)
+	result, err := m.joinLocked(room, role, strings.TrimSpace(req.ReconnectToken), strings.TrimSpace(req.PlayerName), req.ClassID, req.Seat, sender)
 	if err != nil {
 		m.mu.Unlock()
 		return JoinResult{}, err
@@ -386,6 +396,17 @@ func (m *Manager) Snapshot(roomCode string) (RoomSnapshot, error) {
 	return room.snapshot(), nil
 }
 
+func (m *Manager) SessionReconnectToken(sessionID string) string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	session := m.sessions[sessionID]
+	if session == nil {
+		return ""
+	}
+	return session.ReconnectToken
+}
+
 func (m *Manager) AdminSnapshot(roomCode string) (AdminRoomSnapshot, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -463,18 +484,106 @@ func (m *Manager) ClaimClass(sessionID string, classID int) (RoomSnapshot, error
 		m.mu.Unlock()
 		return RoomSnapshot{}, ErrInvalidJoin
 	}
+	if player.ClassID != nil && *player.ClassID != classID {
+		m.mu.Unlock()
+		return RoomSnapshot{}, ErrClassTaken
+	}
 	if existing := room.state.playerClass[classID]; existing != nil && existing != player {
 		m.mu.Unlock()
 		return RoomSnapshot{}, ErrClassTaken
 	}
-
 	if player.ClassID != nil {
-		delete(room.state.playerClass, *player.ClassID)
+		snapshot := room.snapshot()
+		m.mu.Unlock()
+		return snapshot, nil
 	}
+
 	classCopy := classID
 	player.ClassID = &classCopy
 	session.ClassID = &classCopy
 	room.state.playerClass[classID] = player
+
+	snapshot := room.snapshot()
+	senders := room.senders()
+	if err := m.saveRoomLocked(room); err != nil {
+		m.mu.Unlock()
+		return RoomSnapshot{}, err
+	}
+	m.mu.Unlock()
+
+	broadcast(senders, RoomEvent{Type: "room_state", Room: snapshot})
+	return snapshot, nil
+}
+
+func (m *Manager) ClaimSeat(sessionID string, seat int) (RoomSnapshot, error) {
+	if seat < 0 || seat >= MaxSeatsLimit {
+		return RoomSnapshot{}, ErrInvalidSeat
+	}
+
+	m.mu.Lock()
+	session := m.sessions[sessionID]
+	if session == nil || session.Role != RolePlayer {
+		m.mu.Unlock()
+		return RoomSnapshot{}, ErrInvalidJoin
+	}
+	room := m.rooms[session.RoomCode]
+	if room == nil {
+		m.mu.Unlock()
+		return RoomSnapshot{}, ErrRoomNotFound
+	}
+	if seat >= room.MaxSeats {
+		m.mu.Unlock()
+		return RoomSnapshot{}, ErrInvalidSeat
+	}
+
+	player := room.state.players[seat]
+	if player != nil && player.Connected && player.Token != session.ReconnectToken {
+		m.mu.Unlock()
+		return RoomSnapshot{}, ErrSeatOccupied
+	}
+
+	if session.Seat != nil && *session.Seat != seat {
+		if current := room.state.players[*session.Seat]; current != nil && current.Token == session.ReconnectToken {
+			current.Connected = false
+			current.sender = nil
+		}
+	}
+
+	if player == nil {
+		token, err := playerReconnectToken(strings.TrimSpace(session.PlayerName), &seat)
+		if err != nil {
+			m.mu.Unlock()
+			return RoomSnapshot{}, err
+		}
+		session.ReconnectToken = token
+		player = &Player{
+			Seat:     seat,
+			Token:    token,
+			DeviceID: session.DeviceID,
+			Name:     strings.TrimSpace(session.PlayerName),
+		}
+		room.state.players[seat] = player
+	} else {
+		delete(room.state.playerToken, player.Token)
+		player.DeviceID = session.DeviceID
+		if name := strings.TrimSpace(session.PlayerName); name != "" {
+			player.Name = name
+		}
+		token, err := playerReconnectToken(player.Name, &seat)
+		if err != nil {
+			m.mu.Unlock()
+			return RoomSnapshot{}, err
+		}
+		session.ReconnectToken = token
+		player.Token = token
+	}
+	room.state.playerToken[player.Token] = player
+	player.Connected = true
+	player.sender = session.sender
+
+	seatCopy := seat
+	session.Seat = &seatCopy
+	session.ClassID = copyInt(player.ClassID)
 
 	snapshot := room.snapshot()
 	senders := room.senders()
@@ -539,10 +648,10 @@ func (m *Manager) deleteRoomLocked(code string) error {
 	return m.store.DeleteRoom(context.Background(), code)
 }
 
-func (m *Manager) joinLocked(room *Room, role string, reconnectToken string, playerName string, classID *int, sender Sender) (JoinResult, error) {
+func (m *Manager) joinLocked(room *Room, role string, reconnectToken string, playerName string, classID *int, seat *int, sender Sender) (JoinResult, error) {
 	switch role {
 	case RolePlayer:
-		return room.joinPlayer(reconnectToken, playerName, classID, sender)
+		return room.joinPlayer(reconnectToken, playerName, classID, seat, sender)
 	case RoleGameScreen:
 		return room.joinGameScreen(reconnectToken, sender)
 	default:
@@ -550,61 +659,104 @@ func (m *Manager) joinLocked(room *Room, role string, reconnectToken string, pla
 	}
 }
 
-func (r *Room) joinPlayer(reconnectToken string, playerName string, classID *int, sender Sender) (JoinResult, error) {
+func (r *Room) joinPlayer(reconnectToken string, playerName string, classID *int, seat *int, sender Sender) (JoinResult, error) {
 	reconnected := false
 	var player *Player
-	if classID != nil {
-		if *classID < 0 {
-			return JoinResult{}, ErrInvalidClass
-		}
-		player = r.state.playerClass[*classID]
-	}
-	if player == nil {
+	if reconnectToken != "" {
 		player = r.state.playerToken[reconnectToken]
 	}
-	if reconnectToken != "" && player == nil {
-		return JoinResult{}, ErrReconnectNotFound
+	if player != nil && player.Connected {
+		player = nil
 	}
 
-	if player == nil {
-		seat, ok := r.nextSeat()
-		if !ok {
-			return JoinResult{}, ErrRoomFull
-		}
-
-		token, err := randomToken()
+	sessionToken := reconnectToken
+	if sessionToken == "" || player == nil {
+		token, err := playerReconnectToken(playerName, seat)
 		if err != nil {
 			return JoinResult{}, err
 		}
-		deviceID, err := randomID("dev")
-		if err != nil {
-			return JoinResult{}, err
-		}
+		sessionToken = token
+	}
 
+	deviceID, err := randomID("dev")
+	if err != nil {
+		return JoinResult{}, err
+	}
+
+	if player == nil && seat != nil {
+		if *seat < 0 || *seat >= r.MaxSeats {
+			return JoinResult{}, ErrInvalidSeat
+		}
+		target := r.state.players[*seat]
+		if target != nil && target.Connected {
+			return JoinResult{}, ErrSeatOccupied
+		}
+		player = target
+	}
+
+	if player != nil {
+		reconnected = reconnectToken != "" && player.Token == reconnectToken
+		replaced := player.sender
+		delete(r.state.playerToken, player.Token)
+		player.Token = sessionToken
+		player.DeviceID = deviceID
+		if playerName != "" {
+			player.Name = playerName
+		}
+		player.Connected = true
+		player.sender = sender
+		r.state.playerToken[player.Token] = player
+		return r.joinSeatedPlayer(player, reconnected, replaced, sender)
+	} else if seat != nil {
+		if classID != nil && *classID < 0 {
+			return JoinResult{}, ErrInvalidClass
+		}
 		player = &Player{
-			Seat:     seat,
-			Token:    token,
+			Seat:     *seat,
+			Token:    sessionToken,
 			DeviceID: deviceID,
 			Name:     playerName,
 		}
 		if classID != nil {
+			if existing := r.state.playerClass[*classID]; existing != nil {
+				return JoinResult{}, ErrClassTaken
+			}
 			classCopy := *classID
 			player.ClassID = &classCopy
 			r.state.playerClass[classCopy] = player
 		}
-		r.state.players[seat] = player
-		r.state.playerToken[token] = player
-	} else {
-		reconnected = true
-	}
-	if playerName != "" {
-		player.Name = playerName
+		player.Connected = true
+		player.sender = sender
+		r.state.players[player.Seat] = player
+		r.state.playerToken[player.Token] = player
+		return r.joinSeatedPlayer(player, reconnected, nil, sender)
 	}
 
-	replaced := player.sender
-	player.Connected = true
-	player.sender = sender
+	if player == nil {
+		sessionID, err := randomID("sess")
+		if err != nil {
+			return JoinResult{}, err
+		}
+		session := &Session{
+			ID:             sessionID,
+			RoomCode:       r.Code,
+			Role:           RolePlayer,
+			DeviceID:       deviceID,
+			ReconnectToken: sessionToken,
+			PlayerName:     playerName,
+			sender:         sender,
+		}
+		return JoinResult{
+			Session:     session,
+			Room:        r.snapshot(),
+			Reconnected: false,
+		}, nil
+	}
 
+	return r.joinSeatedPlayer(player, reconnected, nil, sender)
+}
+
+func (r *Room) joinSeatedPlayer(player *Player, reconnected bool, replaced Sender, sender Sender) (JoinResult, error) {
 	sessionID, err := randomID("sess")
 	if err != nil {
 		return JoinResult{}, err
@@ -618,6 +770,7 @@ func (r *Room) joinPlayer(reconnectToken string, playerName string, classID *int
 		Seat:           &seat,
 		ClassID:        copyInt(player.ClassID),
 		ReconnectToken: player.Token,
+		PlayerName:     player.Name,
 		sender:         sender,
 	}
 
@@ -685,15 +838,6 @@ func (r *Room) releasePlayer(player *Player) {
 	if player.ClassID != nil {
 		delete(r.state.playerClass, *player.ClassID)
 	}
-}
-
-func (r *Room) nextSeat() (int, bool) {
-	for seat := 0; seat < r.MaxSeats; seat++ {
-		if _, ok := r.state.players[seat]; !ok {
-			return seat, true
-		}
-	}
-	return 0, false
 }
 
 func (r *Room) snapshot() RoomSnapshot {
@@ -837,6 +981,47 @@ func randomToken() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(buf), nil
+}
+
+func playerReconnectToken(playerName string, seat *int) (string, error) {
+	token, err := randomToken()
+	if err != nil {
+		return "", err
+	}
+	seatPart := "seat-open"
+	if seat != nil {
+		seatPart = fmt.Sprintf("seat-%d", *seat+1)
+	}
+	return fmt.Sprintf("%s-%s-%s", tokenSlug(playerName), seatPart, token), nil
+}
+
+func tokenSlug(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return "player"
+	}
+	var builder strings.Builder
+	for _, ch := range value {
+		switch {
+		case ch >= 'a' && ch <= 'z':
+			builder.WriteRune(ch)
+		case ch >= '0' && ch <= '9':
+			builder.WriteRune(ch)
+		case builder.Len() > 0:
+			last := builder.String()[builder.Len()-1]
+			if last != '-' {
+				builder.WriteByte('-')
+			}
+		}
+		if builder.Len() >= 24 {
+			break
+		}
+	}
+	slug := strings.Trim(builder.String(), "-")
+	if slug == "" {
+		return "player"
+	}
+	return slug
 }
 
 func randomID(prefix string) (string, error) {
