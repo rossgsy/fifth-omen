@@ -2,13 +2,94 @@ import { For, Match, Show, Switch, createEffect, createMemo, createSignal, useCo
 import { Icon } from "@iconify-icon/solid";
 import { AppContext } from "../data/app";
 import PlaybookComponent from "../components/Playbook";
-import { playbooks } from "../game";
+import { MajorArcana, number_to_numeral, playbooks } from "../game";
 import { Button, Page, Panel, SectionHeading } from "../components/ui";
+import PlayerHeader from "../components/playbook/PlayerHeader";
+import PickRitualCard from "../components/playbook/Step/PickRitualCard";
+import WaitingForOthers from "../components/playbook/Step/WaitingForOthers";
+
+const BEGIN_GAME_EVENT = "fifth-omen:begin-game";
+const UPDATE_GLOBAL_STATE_EVENT = "fifth-omen:update-global-state";
+const RESOLVE_RITUAL_PHASE_EVENT = "fifth-omen:resolve-ritual-phase";
+
+const clampTracker = (value: number) => Math.max(0, Math.min(10, value));
+
+const TrackerControl = (props: {
+    label: string;
+    value: number;
+    onChange: (value: number) => void;
+}) => (
+    <div class="grid grid-cols-[1fr_auto] items-center gap-3 border border-zinc-800 bg-zinc-950/70 p-3">
+        <div>
+            <p class="text-xs uppercase tracking-[0.18em] text-zinc-600">
+                {props.label}
+            </p>
+            <p class="mt-1 text-3xl tabular-nums leading-none text-zinc-100">
+                {props.value}
+            </p>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+            <Button
+                class="flex h-10 w-10 items-center justify-center p-0 text-2xl leading-none"
+                disabled={props.value <= 0}
+                onClick={() => props.onChange(clampTracker(props.value - 1))}
+            >
+                -
+            </Button>
+            <Button
+                class="flex h-10 w-10 items-center justify-center p-0 text-2xl leading-none"
+                disabled={props.value >= 10}
+                onClick={() => props.onChange(clampTracker(props.value + 1))}
+            >
+                +
+            </Button>
+        </div>
+    </div>
+);
 
 const PlaybookRoute = () => {
     const appContext = useContext(AppContext);
     const [pendingPlaybook, setPendingPlaybook] = createSignal<number | null>(null);
+    const [pendingRitualCard, setPendingRitualCard] = createSignal<number | null>(null);
     const selectedSeat = () => appContext?.contextValue().playerConnection.seat ?? null;
+    const isSetup = () => (appContext?.contextValue().roomState?.phase ?? "setup") === "setup";
+    const ritual = () => appContext?.contextValue().roomState?.ritual ?? null;
+    const isCurrentRitualPlayer = () => (
+        appContext?.contextValue().roomState?.phase === "playing"
+        && ritual()?.phase === "ritual"
+        && selectedSeat() !== null
+        && ritual()?.currentPlayerSeat === selectedSeat()
+    );
+    const isResolvingRitualPlayer = () => (
+        appContext?.contextValue().roomState?.phase === "playing"
+        && (ritual()?.phase === "entity" || ritual()?.phase === "encounter")
+        && selectedSeat() !== null
+        && ritual()?.currentPlayerSeat === selectedSeat()
+    );
+    const currentRitualStep = () => {
+        const state = ritual();
+        if (!state) return null;
+        return state.steps[state.currentStep] ?? null;
+    };
+    const updateGlobalTracker = (key: "doom" | "ward", value: number) => {
+        window.dispatchEvent(new CustomEvent(UPDATE_GLOBAL_STATE_EVENT, {
+            detail: { [key]: value },
+        }));
+    };
+    const GlobalTrackerControls = () => (
+        <div class="grid gap-2 sm:grid-cols-2">
+            <TrackerControl
+                label="Doom"
+                value={appContext?.contextValue().globalDoom ?? 0}
+                onChange={(doom) => updateGlobalTracker("doom", doom)}
+            />
+            <TrackerControl
+                label="Ward"
+                value={appContext?.contextValue().globalWard ?? 0}
+                onChange={(ward) => updateGlobalTracker("ward", ward)}
+            />
+        </div>
+    );
     const players = () => appContext?.contextValue().roomState?.players ?? [];
     const selectedSeatSlot = createMemo(() => (
         selectedSeat() === null ? null : players().find((player) => player.seat === selectedSeat()) ?? null
@@ -145,6 +226,68 @@ const PlaybookRoute = () => {
                             </For>
                         </div>
                     </div>
+                </Page>
+            </Match>
+            <Match when={isSetup() && appContext?.contextValue()?.selectedPlaybook !== null}>
+                <Page class="items-stretch justify-start gap-4">
+                    <PlayerHeader
+                        playbook={playbooks[appContext?.contextValue()?.selectedPlaybook!]}
+                    />
+                    <WaitingForOthers
+                        title="The Circle Gathers"
+                        subtitle="When every omen-bearer has taken their place, open the rite."
+                        isSilent={true}
+                    />
+                </Page>
+            </Match>
+            <Match when={isCurrentRitualPlayer() && appContext?.contextValue()?.selectedPlaybook !== null}>
+                <Page class="items-stretch justify-center gap-4">
+                    <Panel as="section" class="grid min-h-[26rem] place-items-center p-6 text-center">
+                        <PlayerHeader
+                            playbook={playbooks[appContext?.contextValue()?.selectedPlaybook!]}
+                        />
+                        <PickRitualCard />
+                    </Panel>
+                </Page>
+            </Match>
+            <Match when={isResolvingRitualPlayer() && appContext?.contextValue()?.selectedPlaybook !== null}>
+                <Page class="items-stretch justify-center gap-4">
+                    <Panel as="section" class="grid min-h-[26rem] place-items-center p-6 text-center">
+                        <div class="grid max-w-md gap-5">
+                            <SectionHeading
+                                eyebrow={currentRitualStep()?.kind ?? "Ritual"}
+                                title={`Resolve ${currentRitualStep()?.title ?? "the Card"}`}
+                                subtitle="When the table has settled the revealed card, close this phase and pass the thread onward."
+                                titleClass="text-3xl tracking-wide sm:text-4xl"
+                            />
+                            <Button
+                                class="min-h-12 bg-zinc-100 uppercase tracking-[0.16em] text-zinc-950 hover:bg-zinc-300"
+                                onClick={() => window.dispatchEvent(new Event(RESOLVE_RITUAL_PHASE_EVENT))}
+                            >
+                                Complete {currentRitualStep()?.kind ?? "Phase"}
+                            </Button>
+                            <GlobalTrackerControls />
+                        </div>
+                    </Panel>
+                </Page>
+            </Match>
+            <Match when={appContext?.contextValue().roomState?.phase === "playing" && appContext?.contextValue()?.selectedPlaybook !== null && ritual()?.phase !== "complete"}>
+                <WaitingForOthers 
+                    title="Await the Draw"
+                    subtitle="Another player is taking their turn."
+                    isSilent={true}
+                />
+            </Match>
+            <Match when={appContext?.contextValue().roomState?.phase === "playing" && appContext?.contextValue()?.selectedPlaybook !== null && ritual()?.phase === "complete"}>
+                <Page class="items-stretch justify-center gap-4">
+                    <Panel as="section" class="grid min-h-[26rem] place-items-center p-6 text-center">
+                        <SectionHeading
+                            eyebrow="Complete"
+                            title="The Omen Is Set"
+                            subtitle="The five cards have spoken."
+                            titleClass="text-3xl tracking-wide sm:text-4xl"
+                        />
+                    </Panel>
                 </Page>
             </Match>
             <Match when={appContext?.contextValue()?.selectedPlaybook !== null}>

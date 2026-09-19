@@ -23,6 +23,9 @@ type FullscreenElement = HTMLElement & {
 const SHARE_URL = "https://fifth-omen.lab-2.paleglyph.com/";
 const JOIN_TIMEOUT_MS = 8000;
 const UPDATE_GLOBAL_STATE_EVENT = "fifth-omen:update-global-state";
+const BEGIN_GAME_EVENT = "fifth-omen:begin-game";
+const REVEAL_RITUAL_CARD_EVENT = "fifth-omen:reveal-ritual-card";
+const RESOLVE_RITUAL_PHASE_EVENT = "fifth-omen:resolve-ritual-phase";
 
 const roomCodeFromUrl = () => new URLSearchParams(window.location.search).get("room")?.trim().toUpperCase() ?? "";
 
@@ -260,11 +263,28 @@ const updateRoomState = (appContext: AppContextStore | undefined, roomState: Roo
   if (!appContext) return;
 
   const global = roomState?.global;
+  const ritual = roomState?.ritual;
+  const drawnTarotCards = ritual?.drawnCards?.map((card) => (
+    typeof card.tarotNumber === "number" ? card.tarotNumber : null
+  ));
+  const currentStep = typeof ritual?.currentStep === "number" ? ritual.currentStep : appContext.contextValue().currentPhase;
+  const activeEntityCard = ritual?.drawnCards?.find((card) => (
+    card.kind === "Entity" && typeof card.tarotNumber === "number" && !card.resolved
+  ))?.tarotNumber ?? appContext.contextValue().activeEntityCard;
+  const activeArcanaCards = ritual?.drawnCards
+    ?.filter((card) => card.kind === "Encounter")
+    .map((card) => typeof card.tarotNumber === "number" ? card.tarotNumber : null)
+    .slice(0, 2);
+
   appContext.setContextValue({
     ...appContext.contextValue(),
     roomState,
     globalDoom: typeof global?.doom === "number" ? global.doom : appContext.contextValue().globalDoom,
     globalWard: typeof global?.ward === "number" ? global.ward : appContext.contextValue().globalWard,
+    drawnTarotCards: drawnTarotCards?.length ? drawnTarotCards : appContext.contextValue().drawnTarotCards,
+    currentPhase: ritual?.phase === "complete" ? ritual.drawnCards.length : currentStep,
+    activeArcanaCards: activeArcanaCards?.length ? activeArcanaCards : appContext.contextValue().activeArcanaCards,
+    activeEntityCard,
   });
 };
 
@@ -448,6 +468,10 @@ const GameScreenConnectionManager: Component = () => {
         updateRoomState(appContext, parseRoomState(message.room ?? message.data?.room));
         return;
       }
+      if (message.type === "ritual_updated" || message.type === "game_begun") {
+        updateRoomState(appContext, parseRoomState(message.data?.room));
+        return;
+      }
 
       if (message.type === "error") {
         setConnection({
@@ -536,21 +560,12 @@ const GameScreenConnectionManager: Component = () => {
     closeSocket();
   };
 
-  const handleGlobalStateUpdate = (event: Event) => {
-    if (socket?.readyState !== WebSocket.OPEN) return;
-    const detail = (event as CustomEvent<{ doom?: number; ward?: number }>).detail;
-    if (!detail) return;
-    socket.send(JSON.stringify({ type: "set_global_state", ...detail }));
-  };
-
   onMount(() => {
     window.addEventListener("fifth-omen:leave-room", handleLeaveRoom);
-    window.addEventListener(UPDATE_GLOBAL_STATE_EVENT, handleGlobalStateUpdate);
   });
 
   onCleanup(() => {
     window.removeEventListener("fifth-omen:leave-room", handleLeaveRoom);
-    window.removeEventListener(UPDATE_GLOBAL_STATE_EVENT, handleGlobalStateUpdate);
   });
 
   const submitConnection = (event: SubmitEvent) => {
@@ -759,6 +774,10 @@ const PlayerConnectionManager: Component = () => {
         setConnection({ classId, error: null });
         return;
       }
+      if (message.type === "game_begun" || message.type === "ritual_updated") {
+        updateRoomState(appContext, parseRoomState(message.data?.room));
+        return;
+      }
       if (message.type === "error") {
         const code = message.data?.code;
         if (code === "seat_occupied" || code === "invalid_seat") {
@@ -892,14 +911,47 @@ const PlayerConnectionManager: Component = () => {
     }
   };
 
+  const handleBeginGame = () => {
+    if (socket?.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: "begin_game" }));
+    }
+  };
+
+  const handleGlobalStateUpdate = (event: Event) => {
+    if (socket?.readyState !== WebSocket.OPEN) return;
+    const detail = (event as CustomEvent<{ doom?: number; ward?: number }>).detail;
+    if (!detail) return;
+    socket.send(JSON.stringify({ type: "set_global_state", ...detail }));
+  };
+
+  const handleRitualCardReveal = (event: Event) => {
+    if (socket?.readyState !== WebSocket.OPEN) return;
+    const tarotNumber = (event as CustomEvent<{ tarotNumber?: number }>).detail?.tarotNumber;
+    if (typeof tarotNumber !== "number") return;
+    socket.send(JSON.stringify({ type: "reveal_ritual_card", tarotNumber }));
+  };
+
+  const handleRitualPhaseResolve = () => {
+    if (socket?.readyState !== WebSocket.OPEN) return;
+    socket.send(JSON.stringify({ type: "resolve_ritual_phase" }));
+  };
+
   onMount(() => {
     window.addEventListener("fifth-omen:select-class", handleClassSelect);
     window.addEventListener("fifth-omen:select-seat", handleSeatSelect);
+    window.addEventListener(BEGIN_GAME_EVENT, handleBeginGame);
+    window.addEventListener(UPDATE_GLOBAL_STATE_EVENT, handleGlobalStateUpdate);
+    window.addEventListener(REVEAL_RITUAL_CARD_EVENT, handleRitualCardReveal);
+    window.addEventListener(RESOLVE_RITUAL_PHASE_EVENT, handleRitualPhaseResolve);
   });
 
   onCleanup(() => {
     window.removeEventListener("fifth-omen:select-class", handleClassSelect);
     window.removeEventListener("fifth-omen:select-seat", handleSeatSelect);
+    window.removeEventListener(BEGIN_GAME_EVENT, handleBeginGame);
+    window.removeEventListener(UPDATE_GLOBAL_STATE_EVENT, handleGlobalStateUpdate);
+    window.removeEventListener(REVEAL_RITUAL_CARD_EVENT, handleRitualCardReveal);
+    window.removeEventListener(RESOLVE_RITUAL_PHASE_EVENT, handleRitualPhaseResolve);
     closeSocket();
   });
 

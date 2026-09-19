@@ -1,6 +1,6 @@
-import { For, Show, createMemo, createSignal, useContext } from "solid-js";
+import { For, Show, createMemo, useContext } from "solid-js";
 import { Icon } from "@iconify-icon/solid";
-import { Button, ConfirmDialog, Page, Panel, SectionHeading } from "../components/ui";
+import { Page, Panel, SectionHeading } from "../components/ui";
 import { AppContext } from "../data/app";
 import {
     EntityResource,
@@ -23,48 +23,26 @@ const DRAW_STEPS: Array<{ title: string; kind: "Entity" | "Encounter" }> = [
 
 const clamp = (value: number, max: number) => Math.max(0, Math.min(max, value));
 
-const StepperTracker = (props: {
+const DisplayTracker = (props: {
     label: string;
     value: number;
     max: number;
     showDots?: boolean;
-    onChange: (value: number) => void;
 }) => (
     <div class="flex flex-col gap-2 text-center">
         <p class="text-xs uppercase tracking-[0.18em] text-zinc-600">
             {props.label}
         </p>
-        <div class="grid grid-cols-[2.75rem_4rem_2.75rem] items-center justify-center gap-2">
-            <Button
-                class="flex h-11 w-11 items-center justify-center p-0 text-3xl leading-none"
-                disabled={props.value <= 0}
-                onClick={() => props.onChange(clamp(props.value - 1, props.max))}
-            >
-                -
-            </Button>
-            <div class="text-center text-3xl tabular-nums leading-none text-zinc-100">
-                {props.value}
-            </div>
-            <Button
-                class="flex h-11 w-11 items-center justify-center p-0 text-3xl leading-none"
-                disabled={props.value >= props.max}
-                onClick={() => props.onChange(clamp(props.value + 1, props.max))}
-            >
-                +
-            </Button>
+        <div class="text-center text-3xl tabular-nums leading-none text-zinc-100">
+            {props.value}
         </div>
         <Show when={props.showDots ?? true}>
             <div class="flex min-h-8 flex-wrap justify-center gap-0.5 text-base text-zinc-200">
                 <For each={Array.from({ length: props.max }, (_, index) => index)}>
                     {(index) => (
-                        <button
-                            type="button"
-                            aria-label={`Set ${props.label} to ${index + 1}`}
-                            class={index < props.value ? "h-6 w-6 opacity-100" : "h-6 w-6 opacity-30"}
-                            onClick={() => props.onChange(index + 1 === props.value ? index : index + 1)}
-                        >
+                        <span class={index < props.value ? "h-6 w-6 opacity-100" : "h-6 w-6 opacity-30"}>
                             {index < props.value ? "●" : "○"}
-                        </button>
+                        </span>
                     )}
                 </For>
             </div>
@@ -72,37 +50,17 @@ const StepperTracker = (props: {
     </div>
 );
 
-const CompactStepperTracker = (props: {
+const CompactDisplayTracker = (props: {
     label: string;
     value: number;
-    max: number;
-    onChange: (value: number) => void;
 }) => (
-    <div class="grid grid-cols-[1fr_auto] items-center gap-3">
-        <div>
-            <p class="text-xs uppercase tracking-[0.18em] text-zinc-600">
-                {props.label}
-            </p>
-            <p class="mt-1 text-4xl tabular-nums leading-none text-zinc-100">
-                {props.value}
-            </p>
-        </div>
-        <div class="grid grid-cols-2 gap-2">
-            <Button
-                class="flex h-11 w-11 items-center justify-center p-0 text-2xl leading-none"
-                disabled={props.value <= 0}
-                onClick={() => props.onChange(clamp(props.value - 1, props.max))}
-            >
-                -
-            </Button>
-            <Button
-                class="flex h-11 w-11 items-center justify-center p-0 text-2xl leading-none"
-                disabled={props.value >= props.max}
-                onClick={() => props.onChange(clamp(props.value + 1, props.max))}
-            >
-                +
-            </Button>
-        </div>
+    <div>
+        <p class="text-xs uppercase tracking-[0.18em] text-zinc-600">
+            {props.label}
+        </p>
+        <p class="mt-1 text-4xl tabular-nums leading-none text-zinc-100">
+            {props.value}
+        </p>
     </div>
 );
 
@@ -143,15 +101,13 @@ const ArcanaRule = (props: { isStricture?: boolean; rule: string }) => (
 const EntityResourcePanel = (props: {
     resource: EntityResource;
     value: number;
-    onChange: (value: number) => void;
 }) => (
     <div class="border-l border-zinc-800 pl-2">
-        <StepperTracker
+        <DisplayTracker
             label={props.resource.name}
             value={props.value}
             max={20}
             showDots={false}
-            onChange={props.onChange}
         />
         <div class="mt-2 grid gap-2 border-t border-zinc-800 pt-2">
             <div class="grid grid-cols-2 gap-2 text-center">
@@ -207,6 +163,7 @@ const EntityReferenceList = (props: {
 const PlayerRoster = () => {
     const appContext = useContext(AppContext);
     const players = createMemo(() => appContext?.contextValue().roomState?.players ?? []);
+    const currentRitualPlayerSeat = createMemo(() => appContext?.contextValue().roomState?.ritual?.currentPlayerSeat ?? null);
     const seats = createMemo(() => {
         const maxSeats = appContext?.contextValue().roomState?.maxSeats ?? 6;
         return Array.from({ length: maxSeats }, (_, seat) => {
@@ -229,7 +186,6 @@ const PlayerRoster = () => {
                         const playbook = () => seat.playbook;
                         const seatLabel = () => `Seat ${seat.seat + 1}`;
                         const icon = () => playbook()?.icon || "mdi:seat";
-                        const status = () => player()?.connected
                         const subtext = () => {
                             const playerName = player()?.name?.trim();
                             if (playerName) return `${playerName}`;
@@ -237,9 +193,11 @@ const PlayerRoster = () => {
                         };
 
                         return (
-                            <div class={player()?.connected
-                                ? "grid grid-cols-[1.5rem_minmax(0,1fr)] items-center gap-2 border border-zinc-700 bg-zinc-950 p-2"
-                                : "grid grid-cols-[1.5rem_minmax(0,1fr)] items-center gap-2 border border-zinc-800 bg-zinc-950/70 p-2 opacity-60"}
+                            <div class={currentRitualPlayerSeat() === seat.seat
+                                ? "grid grid-cols-[1.5rem_minmax(0,1fr)] items-center gap-2 border border-zinc-300 bg-zinc-900 p-2"
+                                : player()?.connected
+                                    ? "grid grid-cols-[1.5rem_minmax(0,1fr)] items-center gap-2 border border-zinc-700 bg-zinc-950 p-2"
+                                    : "grid grid-cols-[1.5rem_minmax(0,1fr)] items-center gap-2 border border-zinc-800 bg-zinc-950/70 p-2 opacity-60"}
                             >
                                 <Icon icon={icon()} class="text-xl text-zinc-100" />
                                 <div class="min-w-0">
@@ -263,49 +221,21 @@ const PlayerRoster = () => {
 
 const GameSheetRoute = () => {
     const appContext = useContext(AppContext);
-    const [pendingCard, setPendingCard] = createSignal<number | null>(null);
-    const [isCompletePhasePending, setIsCompletePhasePending] = createSignal(false);
-
-    const updateGameSheetValue = (value: Partial<{
-        entityPresence: number;
-        entityResource: number;
-        globalDoom: number;
-        globalWard: number;
-        activeArcanaCards: Array<number | null>;
-        activeEntityCard: number | null;
-        activeEntity: number | null;
-        drawnTarotCards: Array<number | null>;
-        currentPhase: number;
-    }>) => {
-        if (!appContext) return;
-
-        appContext.setContextValue({
-            ...appContext.contextValue(),
-            ...value,
-        });
-
-        const globalUpdate: { doom?: number; ward?: number } = {};
-        if (typeof value.globalDoom === "number") globalUpdate.doom = value.globalDoom;
-        if (typeof value.globalWard === "number") globalUpdate.ward = value.globalWard;
-        if (globalUpdate.doom !== undefined || globalUpdate.ward !== undefined) {
-            window.dispatchEvent(new CustomEvent("fifth-omen:update-global-state", { detail: globalUpdate }));
-        }
-    };
-
-    const cardOptions = createMemo(() => (
-        MajorArcana.map((cardName, tarotNumber) => ({
-            cardName,
-            tarotNumber,
-            numeral: number_to_numeral(tarotNumber),
-        }))
-    ));
+    const phase = createMemo(() => appContext?.contextValue().roomState?.phase ?? "setup");
 
     const drawnCards = createMemo(() => appContext?.contextValue().drawnTarotCards ?? [null, null, null, null, null]);
-    const currentPhase = createMemo(() => Math.min(appContext?.contextValue().currentPhase ?? 0, DRAW_STEPS.length));
-    const isComplete = createMemo(() => currentPhase() >= DRAW_STEPS.length);
-    const currentStep = createMemo(() => DRAW_STEPS[clamp(currentPhase(), DRAW_STEPS.length - 1)]);
+    const ritual = createMemo(() => appContext?.contextValue().roomState?.ritual ?? null);
+    const ritualSteps = createMemo(() => ritual()?.steps?.length ? ritual()!.steps : DRAW_STEPS);
+    const currentRitualPlayer = createMemo(() => {
+        const seat = ritual()?.currentPlayerSeat;
+        if (typeof seat !== "number") return null;
+        return appContext?.contextValue().roomState?.players.find((player) => player.seat === seat) ?? null;
+    });
+    const currentPhase = createMemo(() => Math.min(ritual()?.currentStep ?? appContext?.contextValue().currentPhase ?? 0, ritualSteps().length));
+    const isComplete = createMemo(() => (ritual()?.phase === "complete") || currentPhase() >= ritualSteps().length);
+    const currentStep = createMemo(() => ritualSteps()[clamp(currentPhase(), ritualSteps().length - 1)]);
     const currentCard = createMemo(() => isComplete() ? null : drawnCards()[currentPhase()] ?? null);
-    const isDrawPhase = createMemo(() => !isComplete() && currentCard() === null);
+    const isDrawPhase = createMemo(() => !isComplete() && (ritual()?.phase ?? "ritual") === "ritual" && currentCard() === null);
 
     const entityForCard = (tarotNumber: number | null) => {
         if (tarotNumber === null) return null;
@@ -353,53 +283,40 @@ const GameSheetRoute = () => {
         }).filter((arcana): arcana is NonNullable<typeof arcana> => arcana !== null)
     ));
 
-    const commitPendingCard = () => {
-        if (pendingCard() === null || isComplete()) return;
-
-        const tarotNumber = pendingCard()!;
-        const phase = currentPhase();
-        const nextDrawnCards = [...drawnCards()];
-        nextDrawnCards[phase] = tarotNumber;
-
-        updateGameSheetValue({
-            drawnTarotCards: nextDrawnCards,
-            activeArcanaCards: [nextDrawnCards[1], nextDrawnCards[3]],
-            activeEntityCard: currentStep().kind === "Entity" ? tarotNumber : appContext?.contextValue().activeEntityCard ?? null,
-            activeEntity: currentStep().kind === "Entity" ? lookup_entity_key_for_card(tarotNumber) : appContext?.contextValue().activeEntity ?? null,
-            entityPresence: currentStep().kind === "Entity" ? 0 : appContext?.contextValue().entityPresence ?? 0,
-            entityResource: currentStep().kind === "Entity" ? 0 : appContext?.contextValue().entityResource ?? 0,
-        });
-        setPendingCard(null);
-    };
-
-    const completePhase = () => {
-        if (isComplete()) return;
-        updateGameSheetValue({
-            currentPhase: currentPhase() + 1,
-        });
-        setIsCompletePhasePending(false);
-    };
-
     return (
         <Page class="gap-2 p-2">
             <div class="grid min-h-0 grow gap-2 md:grid-cols-[9.5rem_minmax(0,1fr)]">
                 <PlayerRoster />
                 <div class="flex min-h-0 flex-col gap-2">
+                    <Show when={phase() === "setup"}>
+                        <Panel as="section" class="grid min-h-[28rem] grow place-items-center p-6 text-center">
+                            <div class="grid max-w-2xl gap-5">
+                                <SectionHeading
+                                    eyebrow="The Table Is Veiled"
+                                    title="Waiting to Begin"
+                                    subtitle="The circle is not yet sealed. Let each vessel take a seat, then the first candle may open the omen."
+                                    titleClass="text-4xl tracking-wide sm:text-5xl"
+                                />
+                                <div class="mx-auto flex items-center gap-3 text-zinc-700">
+                                    <div class="h-px w-16 bg-zinc-800" />
+                                    <span class="text-xl">✦</span>
+                                    <div class="h-px w-16 bg-zinc-800" />
+                                </div>
+                            </div>
+                        </Panel>
+                    </Show>
+                    <Show when={phase() !== "setup"}>
                     <div class="grid gap-2 md:grid-cols-[14rem_14rem_minmax(0,1fr)] md:items-stretch">
                 <section class="border border-zinc-800 p-2">
-                    <CompactStepperTracker
+                    <CompactDisplayTracker
                         label="Doom"
                         value={appContext?.contextValue().globalDoom ?? 0}
-                        max={10}
-                        onChange={(globalDoom) => updateGameSheetValue({ globalDoom })}
                     />
                 </section>
                 <section class="border border-zinc-800 p-2">
-                    <CompactStepperTracker
+                    <CompactDisplayTracker
                         label="Ward"
                         value={appContext?.contextValue().globalWard ?? 0}
-                        max={10}
-                        onChange={(globalWard) => updateGameSheetValue({ globalWard })}
                     />
                 </section>
                 <section class="border border-zinc-800 p-2">
@@ -438,12 +355,12 @@ const GameSheetRoute = () => {
                         <SectionHeading
                             eyebrow={currentStep().kind}
                             title={`Draw ${currentStep().title}`}
-                            subtitle="Choose the physical tarot card drawn, then lock it in."
+                            subtitle={`${currentRitualPlayer()?.name || `Seat ${(ritual()?.currentPlayerSeat ?? 0) + 1}`} reveals the next card from their device.`}
                             titleClass="text-2xl tracking-wide"
                         />
 
                         <div class="grid gap-2 md:grid-cols-5">
-                            <For each={DRAW_STEPS}>
+                            <For each={ritualSteps()}>
                                 {(step, index) => (
                                     <div class={index() === currentPhase()
                                         ? "border border-zinc-400 bg-zinc-900 p-2 text-center"
@@ -463,24 +380,9 @@ const GameSheetRoute = () => {
                             </For>
                         </div>
 
-                        <select
-                            value=""
-                            onChange={(event) => {
-                                const value = event.currentTarget.value;
-                                if (value !== "") setPendingCard(Number(value));
-                                event.currentTarget.value = "";
-                            }}
-                            class="mx-auto min-h-12 w-full max-w-xl border border-zinc-700 bg-zinc-950 px-4 text-lg text-zinc-100 outline-none focus:border-zinc-300"
-                        >
-                            <option value="">Select drawn card</option>
-                            <For each={cardOptions()}>
-                                {(option) => (
-                                    <option value={option.tarotNumber}>
-                                        {option.numeral} - {option.cardName}
-                                    </option>
-                                )}
-                            </For>
-                        </select>
+                        <p class="text-center text-sm uppercase tracking-[0.18em] text-zinc-600">
+                            Awaiting player input
+                        </p>
                     </div>
                 </Panel>
             </Show>
@@ -513,12 +415,11 @@ const GameSheetRoute = () => {
 
                                         <div class="grid gap-2">
                                             <div class="border-l border-zinc-800 pl-2">
-                                                <StepperTracker
+                                                <DisplayTracker
                                                     label="Presence"
                                                     value={appContext?.contextValue().entityPresence ?? 0}
                                                     max={20}
                                                     showDots={false}
-                                                    onChange={(entityPresence) => updateGameSheetValue({ entityPresence })}
                                                 />
                                                 <div class="mt-2 border-t border-zinc-800 pt-2 text-center">
                                                     <p class="text-xs uppercase tracking-[0.18em] text-zinc-600">
@@ -536,7 +437,6 @@ const GameSheetRoute = () => {
                                                 <EntityResourcePanel
                                                     resource={resource()}
                                                     value={appContext?.contextValue().entityResource ?? 0}
-                                                    onChange={(entityResource) => updateGameSheetValue({ entityResource })}
                                                 />
                                             )}
                                         </Show>
@@ -574,12 +474,9 @@ const GameSheetRoute = () => {
                         </section>
                     </Show>
 
-                    <Button
-                        class="min-h-12 bg-zinc-100 text-base uppercase tracking-[0.16em] text-zinc-950 hover:bg-zinc-300 disabled:hover:bg-zinc-100"
-                        onClick={() => setIsCompletePhasePending(true)}
-                    >
-                        Complete {currentStep().kind}
-                    </Button>
+                    <Panel as="section" class="p-3 text-center text-sm uppercase tracking-[0.18em] text-zinc-600">
+                        Awaiting player resolution
+                    </Panel>
                 </div>
             </Show>
 
@@ -593,45 +490,7 @@ const GameSheetRoute = () => {
                     />
                 </Panel>
             </Show>
-
-            <Show when={pendingCard() !== null}>
-                <div class="fixed inset-0 z-50 grid place-items-center bg-black/80 p-6 backdrop-blur-sm">
-                    <Panel class="w-full max-w-md p-6 text-center shadow-2xl">
-                        <SectionHeading
-                            eyebrow={currentStep().kind}
-                            title={`${number_to_numeral(pendingCard()!)} - ${MajorArcana[pendingCard()!]}`}
-                            subtitle={`Confirm this as ${currentStep().title}. This cannot be changed later.`}
-                            titleClass="text-2xl tracking-wide"
-                        />
-
-                        <div class="mt-6 grid grid-cols-2 gap-3">
-                            <Button
-                                class="min-h-12 bg-zinc-800 uppercase tracking-[0.14em] hover:bg-zinc-700"
-                                onClick={() => setPendingCard(null)}
-                            >
-                                Cancel
-                            </Button>
-                            <Button
-                                class="min-h-12 bg-zinc-100 uppercase tracking-[0.14em] text-zinc-950 hover:bg-zinc-300"
-                                onClick={commitPendingCard}
-                            >
-                                Confirm
-                            </Button>
-                        </div>
-                    </Panel>
-                </div>
-            </Show>
-
-            <Show when={isCompletePhasePending()}>
-                <ConfirmDialog
-                    eyebrow={currentStep().kind}
-                    title={`Complete ${currentStep().kind}?`}
-                    message={`Advance past this ${currentStep().kind.toLowerCase()} and continue to the next draw step.`}
-                    confirmLabel="Complete"
-                    onCancel={() => setIsCompletePhasePending(false)}
-                    onConfirm={completePhase}
-                />
-            </Show>
+                    </Show>
                 </div>
             </div>
         </Page>

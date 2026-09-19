@@ -54,6 +54,8 @@ export interface PlayerConnection {
 export interface RoomState {
     code: string;
     maxSeats: number;
+    phase?: "setup" | "playing";
+    ritual?: RitualState;
     gameScreens: number;
     global: {
         doom: number;
@@ -66,6 +68,22 @@ export interface RoomState {
         classId?: number;
         playbookId?: number;
         connected: boolean;
+    }>;
+}
+
+export interface RitualState {
+    phase: "ritual" | "entity" | "encounter" | "complete";
+    currentStep: number;
+    currentPlayerSeat?: number;
+    steps: Array<{
+        title: string;
+        kind: "Entity" | "Encounter";
+    }>;
+    drawnCards: Array<{
+        step: number;
+        tarotNumber: number | null;
+        resolved: boolean;
+        kind: "Entity" | "Encounter";
     }>;
 }
 

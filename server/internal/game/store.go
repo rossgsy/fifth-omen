@@ -16,7 +16,9 @@ type StoredRoom struct {
 	Code     string         `json:"code"`
 	PIN      string         `json:"pin"`
 	MaxSeats int            `json:"maxSeats"`
+	Phase    string         `json:"phase"`
 	Global   GlobalState    `json:"global"`
+	Ritual   RitualState    `json:"ritual"`
 	Players  []StoredPlayer `json:"players"`
 	Screens  []StoredScreen `json:"screens"`
 }
@@ -63,7 +65,9 @@ func (r *Room) stored() StoredRoom {
 		Code:     r.Code,
 		PIN:      r.PIN,
 		MaxSeats: r.MaxSeats,
+		Phase:    r.state.phase(),
 		Global:   r.state.Global,
+		Ritual:   r.state.Ritual.normalized(),
 		Players:  players,
 		Screens:  screens,
 	}
@@ -92,6 +96,8 @@ func roomFromStored(stored StoredRoom) (*Room, error) {
 		MaxSeats: stored.MaxSeats,
 		state: roomState{
 			Global:      stored.Global,
+			Phase:       stored.Phase,
+			Ritual:      stored.Ritual.normalized(),
 			players:     make(map[int]*Player),
 			playerToken: make(map[string]*Player),
 			playerClass: make(map[int]*Player),

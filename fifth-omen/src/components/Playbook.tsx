@@ -5,66 +5,8 @@ import { Playbook, Action, ProgressionStep } from "../game";
 import { Button, ConfirmDialog, Page, Panel, SectionHeading } from "./ui";
 
 const clamp = (value: number, max: number) => Math.max(0, Math.min(max, value));
-
-type HealthTrackerProps = {
-    max: number;
-    onChange?: (value: number) => void;
-};
-
-export function HealthTracker(props: HealthTrackerProps) {
-    const appContext = useContext(AppContext);
-    const value = () => appContext?.contextValue()?.playerHealth ?? 0;
-
-    const update = (value: number) => {
-        const next = Math.max(0, Math.min(props.max, value));
-        appContext?.setContextValue({ ...appContext.contextValue(), playerHealth: next });
-        props.onChange?.(next);
-    };
-
-    return (
-        <div class="flex flex-col gap-2 text-center">
-            <p class="text-xs uppercase tracking-[0.18em] text-zinc-600">
-                Health
-            </p>
-            <div class="grid grid-cols-[2.75rem_4rem_2.75rem] items-center justify-center gap-2">
-                <Button
-                    class="flex h-11 w-11 items-center justify-center p-0 text-3xl leading-none"
-                    disabled={value() <= 0}
-                    onClick={() => update(clamp(value() - 1, props.max))}
-                >
-                    -
-                </Button>
-                <div class="text-center text-3xl tabular-nums leading-none text-zinc-100">
-                    {value()}
-                </div>
-                <Button
-                    class="flex h-11 w-11 items-center justify-center p-0 text-3xl leading-none"
-                    disabled={value() >= props.max}
-                    onClick={() => update(clamp(value() + 1, props.max))}
-                >
-                    +
-                </Button>
-            </div>
-            <div class="flex min-h-8 flex-wrap justify-center gap-0.5 text-base text-zinc-200">
-                <For each={Array.from({ length: props.max }, (_, i) => i + 1)}>
-                    {(hp) => {
-                        const filled = () => hp <= value();
-                        return (
-                            <button
-                                type="button"
-                                aria-label={`Set health to ${hp}`}
-                                onClick={() => update(hp === value() ? hp - 1 : hp)}
-                                class={filled() ? "h-6 w-6 opacity-100" : "h-6 w-6 opacity-30"}
-                            >
-                                {filled() ? "●" : "○"}
-                            </button>
-                        );
-                    }}
-                </For>
-            </div>
-        </div>
-    );
-}
+import { HealthTracker } from "./playbook/HealthTracker";
+import PlayerHeader from "./playbook/PlayerHeader";
 
 
 const PlaybookActionComponent = (props: { action: Action; locked?: boolean }) => {
@@ -253,17 +195,9 @@ const PlaybookComponent = (props: PlaybookComponentProps) => {
     });
 
     return <Page class="gap-2 p-2">
-        <section class="grid gap-2 border border-zinc-800 p-2 md:grid-cols-[minmax(0,1fr)_14rem] md:items-center">
-            <SectionHeading
-                eyebrow="Player"
-                title={props.playbook.name}
-                subtitle={props.playbook.description}
-                titleClass="text-2xl tracking-wide"
-            />
-            <div class="border-t border-zinc-800 pt-2 md:border-l md:border-t-0 md:pl-2 md:pt-0">
-                <HealthTracker max={props.playbook.health} />
-            </div>
-        </section>
+        <PlayerHeader
+            playbook={props.playbook}
+        />
 
         <div class="grid grid-cols-3 gap-2">
             <TabButton label="Actions" active={activeTab() === "actions"} onClick={() => setActiveTab("actions")} />

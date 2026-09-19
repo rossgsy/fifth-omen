@@ -14,10 +14,19 @@ const (
 	RoleGameScreen = "gamescreen"
 	RolePlayer     = "player"
 
+	GamePhaseSetup   = "setup"
+	GamePhasePlaying = "playing"
+
+	RitualPhaseRitual    = "ritual"
+	RitualPhaseEntity    = "entity"
+	RitualPhaseEncounter = "encounter"
+	RitualPhaseComplete  = "complete"
+
 	DefaultMaxSeats = 6
 	MaxSeatsLimit   = 6
 	RoomCodeLength  = 5
 	PINLength       = 6
+	MaxTarotCard    = 21
 )
 
 type Sender interface {
@@ -43,6 +52,8 @@ type Room struct {
 // game data here makes room transitions atomic under Manager.mu.
 type roomState struct {
 	Global      GlobalState
+	Phase       string
+	Ritual      RitualState
 	players     map[int]*Player
 	playerToken map[string]*Player
 	playerClass map[int]*Player
@@ -57,6 +68,26 @@ type GlobalState struct {
 type GlobalStateUpdate struct {
 	Doom *int `json:"doom,omitempty"`
 	Ward *int `json:"ward,omitempty"`
+}
+
+type RitualState struct {
+	Phase             string       `json:"phase"`
+	CurrentStep       int          `json:"currentStep"`
+	CurrentPlayerSeat *int         `json:"currentPlayerSeat,omitempty"`
+	Steps             []RitualStep `json:"steps"`
+	DrawnCards        []RitualCard `json:"drawnCards"`
+}
+
+type RitualStep struct {
+	Title string `json:"title"`
+	Kind  string `json:"kind"`
+}
+
+type RitualCard struct {
+	Step        int    `json:"step"`
+	TarotNumber *int   `json:"tarotNumber"`
+	Resolved    bool   `json:"resolved"`
+	Kind        string `json:"kind"`
 }
 
 type Player struct {
@@ -119,6 +150,8 @@ type JoinResult struct {
 type RoomSnapshot struct {
 	Code        string           `json:"code"`
 	MaxSeats    int              `json:"maxSeats"`
+	Phase       string           `json:"phase"`
+	Ritual      RitualState      `json:"ritual"`
 	Players     []PlayerSnapshot `json:"players"`
 	GameScreens int              `json:"gameScreens"`
 	Global      GlobalState      `json:"global"`
@@ -171,6 +204,14 @@ func NewManagerWithStore(ctx context.Context, store RoomStore) (*Manager, error)
 	return manager, nil
 }
 
+var ritualSteps = []RitualStep{
+	{Title: "First Card", Kind: "Entity"},
+	{Title: "Second Card", Kind: "Encounter"},
+	{Title: "Third Card", Kind: "Entity"},
+	{Title: "Fourth Card", Kind: "Encounter"},
+	{Title: "Final Card", Kind: "Entity"},
+}
+
 func (m *Manager) CreateRoom(req CreateRoomRequest) (CreateRoomResult, error) {
 	code := normalizeRoomCode(req.Code)
 	generatedCode := code == ""
@@ -221,6 +262,7 @@ func (m *Manager) CreateRoom(req CreateRoomRequest) (CreateRoomResult, error) {
 		PIN:      pin,
 		MaxSeats: maxSeats,
 		state: roomState{
+			Phase:       GamePhaseSetup,
 			players:     make(map[int]*Player),
 			playerToken: make(map[string]*Player),
 			playerClass: make(map[int]*Player),
@@ -600,16 +642,10 @@ func (m *Manager) ClaimSeat(sessionID string, seat int) (RoomSnapshot, error) {
 	return snapshot, nil
 }
 
-// UpdateGlobalState applies one atomic room-state transition. Only a game
-// screen may change shared trackers, and omitted fields retain their values.
-func (m *Manager) UpdateGlobalState(sessionID string, update GlobalStateUpdate) (RoomSnapshot, error) {
-	if (update.Doom == nil && update.Ward == nil) || !validTracker(update.Doom) || !validTracker(update.Ward) {
-		return RoomSnapshot{}, ErrInvalidGameState
-	}
-
+func (m *Manager) BeginGame(sessionID string) (RoomSnapshot, error) {
 	m.mu.Lock()
 	session := m.sessions[sessionID]
-	if session == nil || session.Role != RoleGameScreen {
+	if session == nil || session.Role != RolePlayer || session.Seat == nil || *session.Seat != 0 {
 		m.mu.Unlock()
 		return RoomSnapshot{}, ErrInvalidJoin
 	}
@@ -617,6 +653,166 @@ func (m *Manager) UpdateGlobalState(sessionID string, update GlobalStateUpdate) 
 	if room == nil {
 		m.mu.Unlock()
 		return RoomSnapshot{}, ErrRoomNotFound
+	}
+	if room.state.phase() != GamePhaseSetup {
+		m.mu.Unlock()
+		return RoomSnapshot{}, ErrInvalidGameState
+	}
+	player := room.state.players[0]
+	if player == nil || player.Token != session.ReconnectToken || !player.Connected {
+		m.mu.Unlock()
+		return RoomSnapshot{}, ErrInvalidJoin
+	}
+
+	firstSeat := 0
+	room.state.Phase = GamePhasePlaying
+	room.state.Ritual = newRitualState(&firstSeat)
+	snapshot := room.snapshot()
+	senders := room.senders()
+	if err := m.saveRoomLocked(room); err != nil {
+		m.mu.Unlock()
+		return RoomSnapshot{}, err
+	}
+	m.mu.Unlock()
+
+	broadcast(senders, RoomEvent{Type: "room_state", Room: snapshot})
+	return snapshot, nil
+}
+
+func (m *Manager) RevealRitualCard(sessionID string, tarotNumber int) (RoomSnapshot, error) {
+	if tarotNumber < 0 || tarotNumber > MaxTarotCard {
+		return RoomSnapshot{}, ErrInvalidGameState
+	}
+
+	m.mu.Lock()
+	session := m.sessions[sessionID]
+	if session == nil {
+		m.mu.Unlock()
+		return RoomSnapshot{}, ErrInvalidJoin
+	}
+	room := m.rooms[session.RoomCode]
+	if room == nil {
+		m.mu.Unlock()
+		return RoomSnapshot{}, ErrRoomNotFound
+	}
+	if room.state.phase() != GamePhasePlaying {
+		m.mu.Unlock()
+		return RoomSnapshot{}, ErrInvalidGameState
+	}
+	room.state.Ritual = room.state.Ritual.normalized()
+	if room.state.Ritual.Phase != RitualPhaseRitual || room.state.Ritual.CurrentStep >= len(ritualSteps) {
+		m.mu.Unlock()
+		return RoomSnapshot{}, ErrInvalidGameState
+	}
+	if !canControlRitual(session, room) {
+		m.mu.Unlock()
+		return RoomSnapshot{}, ErrInvalidJoin
+	}
+	card := &room.state.Ritual.DrawnCards[room.state.Ritual.CurrentStep]
+	if card.TarotNumber != nil || card.Resolved {
+		m.mu.Unlock()
+		return RoomSnapshot{}, ErrInvalidGameState
+	}
+
+	card.TarotNumber = copyInt(&tarotNumber)
+	switch card.Kind {
+	case "Entity":
+		room.state.Ritual.Phase = RitualPhaseEntity
+	case "Encounter":
+		room.state.Ritual.Phase = RitualPhaseEncounter
+	default:
+		m.mu.Unlock()
+		return RoomSnapshot{}, ErrInvalidGameState
+	}
+
+	snapshot := room.snapshot()
+	senders := room.senders()
+	if err := m.saveRoomLocked(room); err != nil {
+		m.mu.Unlock()
+		return RoomSnapshot{}, err
+	}
+	m.mu.Unlock()
+
+	broadcast(senders, RoomEvent{Type: "room_state", Room: snapshot})
+	return snapshot, nil
+}
+
+func (m *Manager) ResolveRitualPhase(sessionID string) (RoomSnapshot, error) {
+	m.mu.Lock()
+	session := m.sessions[sessionID]
+	if session == nil {
+		m.mu.Unlock()
+		return RoomSnapshot{}, ErrInvalidJoin
+	}
+	room := m.rooms[session.RoomCode]
+	if room == nil {
+		m.mu.Unlock()
+		return RoomSnapshot{}, ErrRoomNotFound
+	}
+	if room.state.phase() != GamePhasePlaying {
+		m.mu.Unlock()
+		return RoomSnapshot{}, ErrInvalidGameState
+	}
+	room.state.Ritual = room.state.Ritual.normalized()
+	if room.state.Ritual.Phase != RitualPhaseEntity && room.state.Ritual.Phase != RitualPhaseEncounter {
+		m.mu.Unlock()
+		return RoomSnapshot{}, ErrInvalidGameState
+	}
+	if !canControlRitual(session, room) {
+		m.mu.Unlock()
+		return RoomSnapshot{}, ErrInvalidJoin
+	}
+
+	currentStep := room.state.Ritual.CurrentStep
+	card := &room.state.Ritual.DrawnCards[currentStep]
+	if card.TarotNumber == nil {
+		m.mu.Unlock()
+		return RoomSnapshot{}, ErrInvalidGameState
+	}
+	card.Resolved = true
+	if currentStep >= len(ritualSteps)-1 {
+		room.state.Ritual.Phase = RitualPhaseComplete
+	} else {
+		room.state.Ritual.CurrentStep++
+		room.state.Ritual.Phase = RitualPhaseRitual
+		room.state.Ritual.CurrentPlayerSeat = nextRitualPlayerSeat(room, room.state.Ritual.CurrentPlayerSeat)
+	}
+
+	snapshot := room.snapshot()
+	senders := room.senders()
+	if err := m.saveRoomLocked(room); err != nil {
+		m.mu.Unlock()
+		return RoomSnapshot{}, err
+	}
+	m.mu.Unlock()
+
+	broadcast(senders, RoomEvent{Type: "room_state", Room: snapshot})
+	return snapshot, nil
+}
+
+// UpdateGlobalState applies one atomic room-state transition. Only a connected
+// player device may change shared trackers, and omitted fields retain their
+// values.
+func (m *Manager) UpdateGlobalState(sessionID string, update GlobalStateUpdate) (RoomSnapshot, error) {
+	if (update.Doom == nil && update.Ward == nil) || !validTracker(update.Doom) || !validTracker(update.Ward) {
+		return RoomSnapshot{}, ErrInvalidGameState
+	}
+
+	m.mu.Lock()
+	session := m.sessions[sessionID]
+	if session == nil || session.Role != RolePlayer || session.Seat == nil {
+		m.mu.Unlock()
+		return RoomSnapshot{}, ErrInvalidJoin
+	}
+	room := m.rooms[session.RoomCode]
+	if room == nil {
+		m.mu.Unlock()
+		return RoomSnapshot{}, ErrRoomNotFound
+	}
+	player := room.state.players[*session.Seat]
+	if player == nil || player.Token != session.ReconnectToken || !player.Connected {
+		m.mu.Unlock()
+		return RoomSnapshot{}, ErrInvalidJoin
 	}
 	if update.Doom != nil {
 		room.state.Global.Doom = *update.Doom
@@ -870,10 +1066,112 @@ func (r *Room) snapshot() RoomSnapshot {
 	return RoomSnapshot{
 		Code:        r.Code,
 		MaxSeats:    r.MaxSeats,
+		Phase:       r.state.phase(),
+		Ritual:      r.state.Ritual.normalized(),
 		Players:     players,
 		GameScreens: gameScreens,
 		Global:      r.state.Global,
 	}
+}
+
+func (s roomState) phase() string {
+	if s.Phase == "" {
+		return GamePhaseSetup
+	}
+	return s.Phase
+}
+
+func newRitualState(currentPlayerSeat *int) RitualState {
+	drawnCards := make([]RitualCard, len(ritualSteps))
+	for index, step := range ritualSteps {
+		drawnCards[index] = RitualCard{
+			Step: index,
+			Kind: step.Kind,
+		}
+	}
+	return RitualState{
+		Phase:             RitualPhaseRitual,
+		CurrentStep:       0,
+		CurrentPlayerSeat: copyInt(currentPlayerSeat),
+		Steps:             copyRitualSteps(ritualSteps),
+		DrawnCards:        drawnCards,
+	}
+}
+
+func (s RitualState) normalized() RitualState {
+	if len(s.Steps) == 0 {
+		s.Steps = copyRitualSteps(ritualSteps)
+	}
+	if len(s.DrawnCards) != len(s.Steps) {
+		drawnCards := make([]RitualCard, len(s.Steps))
+		for index, step := range s.Steps {
+			drawnCards[index] = RitualCard{
+				Step: index,
+				Kind: step.Kind,
+			}
+			if index < len(s.DrawnCards) {
+				drawnCards[index].TarotNumber = copyInt(s.DrawnCards[index].TarotNumber)
+				drawnCards[index].Resolved = s.DrawnCards[index].Resolved
+			}
+		}
+		s.DrawnCards = drawnCards
+	}
+	for index := range s.DrawnCards {
+		s.DrawnCards[index].Step = index
+		if s.DrawnCards[index].Kind == "" && index < len(s.Steps) {
+			s.DrawnCards[index].Kind = s.Steps[index].Kind
+		}
+	}
+	if s.CurrentStep < 0 {
+		s.CurrentStep = 0
+	}
+	if s.CurrentStep > len(s.Steps) {
+		s.CurrentStep = len(s.Steps)
+	}
+	if s.Phase == "" {
+		s.Phase = RitualPhaseRitual
+	}
+	return s
+}
+
+func copyRitualSteps(steps []RitualStep) []RitualStep {
+	copied := make([]RitualStep, len(steps))
+	copy(copied, steps)
+	return copied
+}
+
+func canControlRitual(session *Session, room *Room) bool {
+	if session.Role != RolePlayer || session.Seat == nil {
+		return false
+	}
+	currentSeat := room.state.Ritual.CurrentPlayerSeat
+	if currentSeat == nil || *currentSeat != *session.Seat {
+		return false
+	}
+	player := room.state.players[*session.Seat]
+	return player != nil && player.Token == session.ReconnectToken && player.Connected
+}
+
+func nextRitualPlayerSeat(room *Room, currentSeat *int) *int {
+	seats := make([]int, 0, len(room.state.players))
+	for seat, player := range room.state.players {
+		if player != nil && player.ClassID != nil {
+			seats = append(seats, seat)
+		}
+	}
+	if len(seats) == 0 {
+		return copyInt(currentSeat)
+	}
+	sort.Ints(seats)
+	if currentSeat == nil {
+		return copyInt(&seats[0])
+	}
+	for _, seat := range seats {
+		if seat > *currentSeat {
+			return copyInt(&seat)
+		}
+	}
+	return copyInt(&seats[0])
 }
 
 func (r *Room) adminSnapshot() AdminRoomSnapshot {

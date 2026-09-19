@@ -23,11 +23,12 @@ type ServerMessage struct {
 }
 
 type ClientMessage struct {
-	Type    string `json:"type"`
-	ClassID *int   `json:"classId,omitempty"`
-	Seat    *int   `json:"seat,omitempty"`
-	Doom    *int   `json:"doom,omitempty"`
-	Ward    *int   `json:"ward,omitempty"`
+	Type        string `json:"type"`
+	ClassID     *int   `json:"classId,omitempty"`
+	Seat        *int   `json:"seat,omitempty"`
+	Doom        *int   `json:"doom,omitempty"`
+	Ward        *int   `json:"ward,omitempty"`
+	TarotNumber *int   `json:"tarotNumber,omitempty"`
 }
 
 type client struct {
@@ -188,6 +189,63 @@ func (c *client) readLoop(ctx context.Context, manager *game.Manager, sessionID 
 				Data: map[string]any{
 					"classId": *msg.ClassID,
 					"room":    room,
+				},
+			})
+		}
+		if msg.Type == "begin_game" {
+			room, err := manager.BeginGame(sessionID)
+			if err != nil {
+				c.Send(ServerMessage{
+					Type: "error",
+					Data: map[string]string{
+						"code":    errorCode(err),
+						"message": err.Error(),
+					},
+				})
+				continue
+			}
+			c.Send(ServerMessage{
+				Type: "game_begun",
+				Data: map[string]any{
+					"room": room,
+				},
+			})
+		}
+		if msg.Type == "reveal_ritual_card" && msg.TarotNumber != nil {
+			room, err := manager.RevealRitualCard(sessionID, *msg.TarotNumber)
+			if err != nil {
+				c.Send(ServerMessage{
+					Type: "error",
+					Data: map[string]string{
+						"code":    errorCode(err),
+						"message": err.Error(),
+					},
+				})
+				continue
+			}
+			c.Send(ServerMessage{
+				Type: "ritual_updated",
+				Data: map[string]any{
+					"room": room,
+				},
+			})
+		}
+		if msg.Type == "resolve_ritual_phase" {
+			room, err := manager.ResolveRitualPhase(sessionID)
+			if err != nil {
+				c.Send(ServerMessage{
+					Type: "error",
+					Data: map[string]string{
+						"code":    errorCode(err),
+						"message": err.Error(),
+					},
+				})
+				continue
+			}
+			c.Send(ServerMessage{
+				Type: "ritual_updated",
+				Data: map[string]any{
+					"room": room,
 				},
 			})
 		}

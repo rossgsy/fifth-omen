@@ -150,7 +150,7 @@ func TestPlayersChooseSeatsAndSeatClassesLock(t *testing.T) {
 	}
 }
 
-func TestGameScreenUpdatesGlobalState(t *testing.T) {
+func TestPlayerUpdatesGlobalState(t *testing.T) {
 	manager := NewManager()
 	if _, err := manager.CreateRoom(CreateRoomRequest{Code: "STATE", PIN: "123456"}); err != nil {
 		t.Fatalf("create room: %v", err)
@@ -179,7 +179,7 @@ func TestGameScreenUpdatesGlobalState(t *testing.T) {
 	}
 
 	doom, ward := 4, 7
-	snapshot, err := manager.UpdateGlobalState(screen.Session.ID, GlobalStateUpdate{Doom: &doom, Ward: &ward})
+	snapshot, err := manager.UpdateGlobalState(player.Session.ID, GlobalStateUpdate{Doom: &doom, Ward: &ward})
 	if err != nil {
 		t.Fatalf("update global state: %v", err)
 	}
@@ -194,8 +194,110 @@ func TestGameScreenUpdatesGlobalState(t *testing.T) {
 	if _, err := manager.UpdateGlobalState(screen.Session.ID, GlobalStateUpdate{Doom: &invalid}); err != ErrInvalidGameState {
 		t.Fatalf("invalid tracker error = %v, want %v", err, ErrInvalidGameState)
 	}
-	if _, err := manager.UpdateGlobalState(player.Session.ID, GlobalStateUpdate{Doom: &doom}); err != ErrInvalidJoin {
-		t.Fatalf("player update error = %v, want %v", err, ErrInvalidJoin)
+	if _, err := manager.UpdateGlobalState(screen.Session.ID, GlobalStateUpdate{Doom: &doom}); err != ErrInvalidJoin {
+		t.Fatalf("game screen update error = %v, want %v", err, ErrInvalidJoin)
+	}
+}
+
+func TestOnlyFirstSeatBeginsSetupGame(t *testing.T) {
+	manager := NewManager()
+	if _, err := manager.CreateRoom(CreateRoomRequest{Code: "BEGIN", PIN: "123456", MaxSeats: 2}); err != nil {
+		t.Fatalf("create room: %v", err)
+	}
+
+	first, err := manager.Join(JoinRequest{RoomCode: "BEGIN", PIN: "123456", Role: RolePlayer}, &testSender{})
+	if err != nil {
+		t.Fatalf("join first player: %v", err)
+	}
+	if _, err := manager.ClaimSeat(first.Session.ID, 0); err != nil {
+		t.Fatalf("claim first seat: %v", err)
+	}
+
+	second, err := manager.Join(JoinRequest{RoomCode: "BEGIN", PIN: "123456", Role: RolePlayer}, &testSender{})
+	if err != nil {
+		t.Fatalf("join second player: %v", err)
+	}
+	if _, err := manager.ClaimSeat(second.Session.ID, 1); err != nil {
+		t.Fatalf("claim second seat: %v", err)
+	}
+
+	if _, err := manager.BeginGame(second.Session.ID); err != ErrInvalidJoin {
+		t.Fatalf("second seat begin error = %v, want %v", err, ErrInvalidJoin)
+	}
+
+	snapshot, err := manager.BeginGame(first.Session.ID)
+	if err != nil {
+		t.Fatalf("first seat begin: %v", err)
+	}
+	if snapshot.Phase != GamePhasePlaying {
+		t.Fatalf("phase after begin = %q, want %q", snapshot.Phase, GamePhasePlaying)
+	}
+	if _, err := manager.BeginGame(first.Session.ID); err != ErrInvalidGameState {
+		t.Fatalf("second begin error = %v, want %v", err, ErrInvalidGameState)
+	}
+}
+
+func TestRitualFlowRevealsResolvesAndAdvancesPlayers(t *testing.T) {
+	manager := NewManager()
+	if _, err := manager.CreateRoom(CreateRoomRequest{Code: "RITES", PIN: "123456", MaxSeats: 2}); err != nil {
+		t.Fatalf("create room: %v", err)
+	}
+
+	first, err := manager.Join(JoinRequest{RoomCode: "RITES", PIN: "123456", Role: RolePlayer}, &testSender{})
+	if err != nil {
+		t.Fatalf("join first player: %v", err)
+	}
+	if _, err := manager.ClaimSeat(first.Session.ID, 0); err != nil {
+		t.Fatalf("claim first seat: %v", err)
+	}
+	if _, err := manager.ClaimClass(first.Session.ID, 1); err != nil {
+		t.Fatalf("claim first class: %v", err)
+	}
+	second, err := manager.Join(JoinRequest{RoomCode: "RITES", PIN: "123456", Role: RolePlayer}, &testSender{})
+	if err != nil {
+		t.Fatalf("join second player: %v", err)
+	}
+	if _, err := manager.ClaimSeat(second.Session.ID, 1); err != nil {
+		t.Fatalf("claim second seat: %v", err)
+	}
+	if _, err := manager.ClaimClass(second.Session.ID, 2); err != nil {
+		t.Fatalf("claim second class: %v", err)
+	}
+
+	if _, err := manager.BeginGame(first.Session.ID); err != nil {
+		t.Fatalf("begin game: %v", err)
+	}
+	if _, err := manager.RevealRitualCard(second.Session.ID, 3); err != ErrInvalidJoin {
+		t.Fatalf("non-current player reveal error = %v, want %v", err, ErrInvalidJoin)
+	}
+	snapshot, err := manager.RevealRitualCard(first.Session.ID, 3)
+	if err != nil {
+		t.Fatalf("reveal first card: %v", err)
+	}
+	if snapshot.Ritual.Phase != RitualPhaseEntity {
+		t.Fatalf("ritual phase after first reveal = %q, want %q", snapshot.Ritual.Phase, RitualPhaseEntity)
+	}
+	if snapshot.Ritual.DrawnCards[0].TarotNumber == nil || *snapshot.Ritual.DrawnCards[0].TarotNumber != 3 {
+		t.Fatalf("first ritual card = %+v, want tarot 3", snapshot.Ritual.DrawnCards[0])
+	}
+
+	snapshot, err = manager.ResolveRitualPhase(first.Session.ID)
+	if err != nil {
+		t.Fatalf("resolve first card: %v", err)
+	}
+	if snapshot.Ritual.Phase != RitualPhaseRitual || snapshot.Ritual.CurrentStep != 1 {
+		t.Fatalf("ritual after resolve = %+v, want ritual step 1", snapshot.Ritual)
+	}
+	if snapshot.Ritual.CurrentPlayerSeat == nil || *snapshot.Ritual.CurrentPlayerSeat != 1 {
+		t.Fatalf("current ritual player = %v, want seat 1", snapshot.Ritual.CurrentPlayerSeat)
+	}
+
+	snapshot, err = manager.RevealRitualCard(second.Session.ID, 8)
+	if err != nil {
+		t.Fatalf("reveal second card: %v", err)
+	}
+	if snapshot.Ritual.Phase != RitualPhaseEncounter {
+		t.Fatalf("ritual phase after second reveal = %q, want %q", snapshot.Ritual.Phase, RitualPhaseEncounter)
 	}
 }
 
@@ -204,16 +306,19 @@ func TestGlobalStateSurvivesDisconnects(t *testing.T) {
 	if _, err := manager.CreateRoom(CreateRoomRequest{Code: "STATE", PIN: "123456"}); err != nil {
 		t.Fatalf("create room: %v", err)
 	}
-	screen, err := manager.Join(JoinRequest{RoomCode: "STATE", PIN: "123456", Role: RoleGameScreen}, &testSender{})
+	player, err := manager.Join(JoinRequest{RoomCode: "STATE", PIN: "123456", Role: RolePlayer}, &testSender{})
 	if err != nil {
-		t.Fatalf("join game screen: %v", err)
+		t.Fatalf("join player: %v", err)
+	}
+	if _, err := manager.ClaimSeat(player.Session.ID, 0); err != nil {
+		t.Fatalf("claim player seat: %v", err)
 	}
 	ward := 3
-	if _, err := manager.UpdateGlobalState(screen.Session.ID, GlobalStateUpdate{Ward: &ward}); err != nil {
+	if _, err := manager.UpdateGlobalState(player.Session.ID, GlobalStateUpdate{Ward: &ward}); err != nil {
 		t.Fatalf("update global state: %v", err)
 	}
 
-	manager.Leave(screen.Session.ID)
+	manager.Leave(player.Session.ID)
 	snapshot, err := manager.Snapshot("STATE")
 	if err != nil {
 		t.Fatalf("snapshot: %v", err)
@@ -244,12 +349,12 @@ func TestManagerLoadsPersistedRooms(t *testing.T) {
 		t.Fatalf("claim class: %v", err)
 	}
 
-	screen, err := manager.Join(JoinRequest{RoomCode: "LOAD1", PIN: "123456", Role: RoleGameScreen}, &testSender{})
+	_, err = manager.Join(JoinRequest{RoomCode: "LOAD1", PIN: "123456", Role: RoleGameScreen}, &testSender{})
 	if err != nil {
 		t.Fatalf("join game screen: %v", err)
 	}
 	doom, ward := 6, 2
-	if _, err := manager.UpdateGlobalState(screen.Session.ID, GlobalStateUpdate{Doom: &doom, Ward: &ward}); err != nil {
+	if _, err := manager.UpdateGlobalState(player.Session.ID, GlobalStateUpdate{Doom: &doom, Ward: &ward}); err != nil {
 		t.Fatalf("update global state: %v", err)
 	}
 
