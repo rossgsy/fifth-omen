@@ -84,10 +84,12 @@ const ROOM_ID_STORAGE_KEY = "room_id";
 const PLAYER_NAME_STORAGE_KEY = "player_name";
 const PLAYER_RECONNECT_TOKEN_STORAGE_KEY = "player_reconnect_token";
 const PLAYER_SEAT_STORAGE_KEY = "player_seat";
+const GAME_SCREEN_RECONNECT_TOKEN_STORAGE_KEY = "game_screen_reconnect_token";
 
 const readRoomID = () => window.localStorage.getItem(ROOM_ID_STORAGE_KEY) ?? "";
 const readPlayerName = () => window.localStorage.getItem(PLAYER_NAME_STORAGE_KEY) ?? "";
 const readPlayerReconnectToken = () => window.localStorage.getItem(PLAYER_RECONNECT_TOKEN_STORAGE_KEY) ?? "";
+const readGameScreenReconnectToken = () => window.localStorage.getItem(GAME_SCREEN_RECONNECT_TOKEN_STORAGE_KEY) ?? "";
 const readPlayerSeat = () => {
     const value = window.localStorage.getItem(PLAYER_SEAT_STORAGE_KEY);
     if (value === null) return null;
@@ -125,6 +127,13 @@ const persistAllowedState = (value: AppContextValue) => {
     } else {
         window.localStorage.removeItem(PLAYER_SEAT_STORAGE_KEY);
     }
+
+    const gameScreenReconnectToken = value.gameScreenConnection.reconnectToken.trim();
+    if (gameScreenReconnectToken) {
+        window.localStorage.setItem(GAME_SCREEN_RECONNECT_TOKEN_STORAGE_KEY, gameScreenReconnectToken);
+    } else {
+        window.localStorage.removeItem(GAME_SCREEN_RECONNECT_TOKEN_STORAGE_KEY);
+    }
 };
 
 const AppContextProvider = (props: AppContextProviderProps) => {
@@ -134,6 +143,7 @@ const AppContextProvider = (props: AppContextProviderProps) => {
     const storedPlayerName = readPlayerName();
     const storedPlayerReconnectToken = readPlayerReconnectToken();
     const storedPlayerSeat = readPlayerSeat();
+    const storedGameScreenReconnectToken = readGameScreenReconnectToken();
     let initialContext: AppContextValue = {
         selectedPlaybook: null,
         playerHealth: 0,
@@ -150,9 +160,9 @@ const AppContextProvider = (props: AppContextProviderProps) => {
         deviceMode: null,
         gameScreenConnection: {
             endpointUrl: "",
-            roomCode: "",
+            roomCode: storedRoomID,
             pin: "",
-            reconnectToken: "",
+            reconnectToken: storedGameScreenReconnectToken,
             status: "idle",
             error: null,
         },

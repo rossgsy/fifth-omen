@@ -273,7 +273,10 @@ func (m *Manager) Join(req JoinRequest, sender Sender) (JoinResult, error) {
 		return JoinResult{}, ErrRoomNotFound
 	}
 	if pin == "" {
-		if role != RolePlayer || req.ReconnectToken == "" || room.state.playerToken[strings.TrimSpace(req.ReconnectToken)] == nil {
+		reconnectToken := strings.TrimSpace(req.ReconnectToken)
+		validPlayerReconnect := role == RolePlayer && reconnectToken != "" && room.state.playerToken[reconnectToken] != nil
+		validGameScreenReconnect := role == RoleGameScreen && reconnectToken != "" && room.state.screens[reconnectToken] != nil
+		if !validPlayerReconnect && !validGameScreenReconnect {
 			m.mu.Unlock()
 			return JoinResult{}, ErrInvalidPIN
 		}

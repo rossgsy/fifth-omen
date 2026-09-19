@@ -222,7 +222,7 @@ const PlayerRoster = () => {
             <p class="text-center text-xs uppercase tracking-[0.18em] text-zinc-600">
                 Seats
             </p>
-            <div class="grid grid-cols-2 gap-2 md:grid-cols-1">
+            <div class="grid grid-cols-2 gap-2">
                 <For each={seats()}>
                     {(seat) => {
                         const player = () => seat.player;

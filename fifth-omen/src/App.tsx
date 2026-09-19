@@ -42,19 +42,27 @@ const clearedPlayerState = (value: ReturnType<AppContextStore["contextValue"]>) 
 
 const DeviceMenu: Component = () => {
   const appContext = useContext(AppContext);
-  const canRejoin = () => Boolean(
+  const canRejoinPlayer = () => Boolean(
     appContext?.contextValue().playerConnection.roomCode &&
     appContext?.contextValue().playerConnection.reconnectToken
   );
-  const rejoinLabel = () => {
+  const canRejoinGameScreen = () => Boolean(
+    appContext?.contextValue().gameScreenConnection.roomCode &&
+    appContext?.contextValue().gameScreenConnection.reconnectToken
+  );
+  const playerRejoinLabel = () => {
     const connection = appContext?.contextValue().playerConnection;
     const name = connection?.name?.trim() || "Player";
     const seat = typeof connection?.seat === "number" ? `Seat ${connection.seat + 1}` : "Choose a seat";
     return `${name} / ${seat}`;
   };
+  const gameScreenRejoinLabel = () => {
+    const roomCode = appContext?.contextValue().gameScreenConnection.roomCode || "Last room";
+    return `Game Screen / ${roomCode}`;
+  };
 
-  const rejoinLastGame = () => {
-    if (!appContext || !canRejoin()) return;
+  const rejoinPlayer = () => {
+    if (!appContext || !canRejoinPlayer()) return;
     const current = appContext.contextValue();
     appContext.setContextValue({
       ...clearedPlayerState(current),
@@ -63,6 +71,23 @@ const DeviceMenu: Component = () => {
       playerConnection: {
         ...current.playerConnection,
         endpointUrl: current.playerConnection.endpointUrl || gameWsUrl(),
+        pin: "",
+        status: "disconnected",
+        error: null,
+      },
+    });
+  };
+
+  const rejoinGameScreen = () => {
+    if (!appContext || !canRejoinGameScreen()) return;
+    const current = appContext.contextValue();
+    appContext.setContextValue({
+      ...current,
+      roomState: null,
+      deviceMode: "gamesheet",
+      gameScreenConnection: {
+        ...current.gameScreenConnection,
+        endpointUrl: current.gameScreenConnection.endpointUrl || gameWsUrl(),
         pin: "",
         status: "disconnected",
         error: null,
@@ -108,14 +133,25 @@ const DeviceMenu: Component = () => {
   };
 
   return <div class="flex flex-col min-h-100 grow p-4 justify-center gap-3">
-    <Show when={canRejoin()}>
+    <Show when={canRejoinPlayer()}>
       <ActionCard
-        eyebrow="Last Game"
-        title="Rejoin"
-        onClick={rejoinLastGame}
+        eyebrow="Last Player"
+        title="Rejoin Player"
+        onClick={rejoinPlayer}
       >
         <p class="mt-2 text-sm uppercase tracking-[0.18em] text-zinc-600">
-          {rejoinLabel()}
+          {playerRejoinLabel()}
+        </p>
+      </ActionCard>
+    </Show>
+    <Show when={canRejoinGameScreen()}>
+      <ActionCard
+        eyebrow="Last Screen"
+        title="Rejoin Game Screen"
+        onClick={rejoinGameScreen}
+      >
+        <p class="mt-2 text-sm uppercase tracking-[0.18em] text-zinc-600">
+          {gameScreenRejoinLabel()}
         </p>
       </ActionCard>
     </Show>
@@ -341,10 +377,10 @@ const GameScreenConnectionManager: Component = () => {
   let manuallyClosed = false;
 
   const connection = () => appContext?.contextValue().gameScreenConnection;
-  const hasCredentials = () => Boolean(connection()?.roomCode && connection()?.pin);
+  const hasCredentials = () => Boolean(connection()?.roomCode && (connection()?.pin || connection()?.reconnectToken));
   const shouldPrompt = () => {
     const current = connection();
-    return !current?.roomCode || !current.pin || current.status === "error";
+    return !current?.roomCode || (!current.pin && !current.reconnectToken) || current.status === "error";
   };
 
   const setConnection = (value: Partial<GameScreenConnection>) => {
@@ -363,7 +399,7 @@ const GameScreenConnectionManager: Component = () => {
 
   const connect = () => {
     const current = connection();
-    if (!current?.roomCode || !current.pin) return;
+    if (!current?.roomCode || (!current.pin && !current.reconnectToken)) return;
 
     closeSocket();
     manuallyClosed = false;
@@ -372,7 +408,9 @@ const GameScreenConnectionManager: Component = () => {
     const endpointUrl = current.endpointUrl || gameWsUrl();
     const url = normalizeWsUrl(endpointUrl);
     url.searchParams.set("room", current.roomCode);
-    url.searchParams.set("pin", current.pin);
+    if (current.pin) {
+      url.searchParams.set("pin", current.pin);
+    }
     url.searchParams.set("role", "gamescreen");
     if (current.reconnectToken) {
       url.searchParams.set("reconnect_token", current.reconnectToken);
@@ -446,6 +484,7 @@ const GameScreenConnectionManager: Component = () => {
         setConnection({
           status: "error",
           error: connectionFailureMessage(event),
+          pin: "",
           reconnectToken: "",
         });
         return;
