@@ -1,6 +1,7 @@
 package game
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -27,6 +28,7 @@ type Manager struct {
 	mu       sync.Mutex
 	rooms    map[string]*Room
 	sessions map[string]*Session
+	store    RoomStore
 }
 
 type Room struct {
@@ -142,6 +144,27 @@ func NewManager() *Manager {
 	}
 }
 
+func NewManagerWithStore(ctx context.Context, store RoomStore) (*Manager, error) {
+	manager := NewManager()
+	manager.store = store
+	if store == nil {
+		return manager, nil
+	}
+
+	rooms, err := store.LoadRooms(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, storedRoom := range rooms {
+		room, err := roomFromStored(storedRoom)
+		if err != nil {
+			return nil, err
+		}
+		manager.rooms[room.Code] = room
+	}
+	return manager, nil
+}
+
 func (m *Manager) CreateRoom(req CreateRoomRequest) (CreateRoomResult, error) {
 	code := normalizeRoomCode(req.Code)
 	generatedCode := code == ""
@@ -197,6 +220,10 @@ func (m *Manager) CreateRoom(req CreateRoomRequest) (CreateRoomResult, error) {
 		},
 	}
 	m.rooms[code] = room
+	if err := m.saveRoomLocked(room); err != nil {
+		delete(m.rooms, code)
+		return CreateRoomResult{}, err
+	}
 
 	return CreateRoomResult{
 		Room: room.snapshot(),
@@ -249,6 +276,11 @@ func (m *Manager) Join(req JoinRequest, sender Sender) (JoinResult, error) {
 	}
 
 	m.sessions[result.Session.ID] = result.Session
+	if err := m.saveRoomLocked(room); err != nil {
+		delete(m.sessions, result.Session.ID)
+		m.mu.Unlock()
+		return JoinResult{}, err
+	}
 	replaced = result.replaced
 	senders := room.sendersExcept(sender)
 	event := RoomEvent{Type: "room_state", Room: room.snapshot()}
@@ -299,6 +331,7 @@ func (m *Manager) Leave(sessionID string) {
 
 	senders := room.senders()
 	event := RoomEvent{Type: "room_state", Room: room.snapshot()}
+	_ = m.saveRoomLocked(room)
 	m.mu.Unlock()
 
 	broadcast(senders, event)
@@ -332,6 +365,7 @@ func (m *Manager) ReleaseSession(sessionID string) {
 
 	senders := room.senders()
 	event := RoomEvent{Type: "room_state", Room: room.snapshot()}
+	_ = m.saveRoomLocked(room)
 	m.mu.Unlock()
 
 	broadcast(senders, event)
@@ -384,6 +418,10 @@ func (m *Manager) DeleteRoom(roomCode string) error {
 		return ErrRoomNotFound
 	}
 
+	if err := m.deleteRoomLocked(room.Code); err != nil {
+		m.mu.Unlock()
+		return err
+	}
 	delete(m.rooms, room.Code)
 	for sessionID, session := range m.sessions {
 		if session.RoomCode == room.Code {
@@ -436,6 +474,10 @@ func (m *Manager) ClaimClass(sessionID string, classID int) (RoomSnapshot, error
 
 	snapshot := room.snapshot()
 	senders := room.senders()
+	if err := m.saveRoomLocked(room); err != nil {
+		m.mu.Unlock()
+		return RoomSnapshot{}, err
+	}
 	m.mu.Unlock()
 
 	broadcast(senders, RoomEvent{Type: "room_state", Room: snapshot})
@@ -469,10 +511,28 @@ func (m *Manager) UpdateGlobalState(sessionID string, update GlobalStateUpdate) 
 
 	snapshot := room.snapshot()
 	senders := room.senders()
+	if err := m.saveRoomLocked(room); err != nil {
+		m.mu.Unlock()
+		return RoomSnapshot{}, err
+	}
 	m.mu.Unlock()
 
 	broadcast(senders, RoomEvent{Type: "room_state", Room: snapshot})
 	return snapshot, nil
+}
+
+func (m *Manager) saveRoomLocked(room *Room) error {
+	if m.store == nil {
+		return nil
+	}
+	return m.store.SaveRoom(context.Background(), room.stored())
+}
+
+func (m *Manager) deleteRoomLocked(code string) error {
+	if m.store == nil {
+		return nil
+	}
+	return m.store.DeleteRoom(context.Background(), code)
 }
 
 func (m *Manager) joinLocked(room *Room, role string, reconnectToken string, classID *int, sender Sender) (JoinResult, error) {

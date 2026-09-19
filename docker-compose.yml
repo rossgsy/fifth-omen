@@ -1,6 +1,8 @@
 networks:
   traefik:
     external: true
+  omen:
+    internal: true
 
 services:
   recorder-frontend:
@@ -21,8 +23,12 @@ services:
     image: "rossgsy/fifth-omen-server:local"
     networks:
       - traefik
+      - omen
     environment:
       - ADMIN_PASSWORD=ross123
+      - REDIS_ADDR=redis:6379
+    depends_on:
+      - redis
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik"
@@ -31,3 +37,8 @@ services:
       - "traefik.http.routers.fifth-omen-server.tls=true"
       - "traefik.http.routers.fifth-omen-server.tls.certresolver=zerossl"
       - "traefik.http.services.fifth-omen-server.loadbalancer.server.port=8080"
+  redis:
+    image: "redis:latest"
+    networks:
+      - traefik
+      - omen

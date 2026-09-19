@@ -1,6 +1,9 @@
 package game
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 type testSender struct {
 	closed bool
@@ -14,6 +17,32 @@ func (s *testSender) Send(v any) bool {
 
 func (s *testSender) Close(string) {
 	s.closed = true
+}
+
+type memoryRoomStore struct {
+	rooms map[string]StoredRoom
+}
+
+func newMemoryRoomStore() *memoryRoomStore {
+	return &memoryRoomStore{rooms: make(map[string]StoredRoom)}
+}
+
+func (s *memoryRoomStore) LoadRooms(context.Context) ([]StoredRoom, error) {
+	rooms := make([]StoredRoom, 0, len(s.rooms))
+	for _, room := range s.rooms {
+		rooms = append(rooms, room)
+	}
+	return rooms, nil
+}
+
+func (s *memoryRoomStore) SaveRoom(_ context.Context, room StoredRoom) error {
+	s.rooms[room.Code] = room
+	return nil
+}
+
+func (s *memoryRoomStore) DeleteRoom(_ context.Context, code string) error {
+	delete(s.rooms, normalizeRoomCode(code))
+	return nil
 }
 
 func TestPlayerClassIsReleasedOnDisconnect(t *testing.T) {
@@ -170,5 +199,73 @@ func TestGlobalStateSurvivesDisconnects(t *testing.T) {
 	}
 	if snapshot.Global.Ward != ward {
 		t.Fatalf("ward after disconnect = %d, want %d", snapshot.Global.Ward, ward)
+	}
+}
+
+func TestManagerLoadsPersistedRooms(t *testing.T) {
+	store := newMemoryRoomStore()
+	manager, err := NewManagerWithStore(context.Background(), store)
+	if err != nil {
+		t.Fatalf("new manager with store: %v", err)
+	}
+	if _, err := manager.CreateRoom(CreateRoomRequest{Code: "LOAD1", PIN: "123456", MaxSeats: 3}); err != nil {
+		t.Fatalf("create room: %v", err)
+	}
+
+	player, err := manager.Join(JoinRequest{RoomCode: "LOAD1", PIN: "123456", Role: RolePlayer}, &testSender{})
+	if err != nil {
+		t.Fatalf("join player: %v", err)
+	}
+	if _, err := manager.ClaimClass(player.Session.ID, 4); err != nil {
+		t.Fatalf("claim class: %v", err)
+	}
+
+	screen, err := manager.Join(JoinRequest{RoomCode: "LOAD1", PIN: "123456", Role: RoleGameScreen}, &testSender{})
+	if err != nil {
+		t.Fatalf("join game screen: %v", err)
+	}
+	doom, ward := 6, 2
+	if _, err := manager.UpdateGlobalState(screen.Session.ID, GlobalStateUpdate{Doom: &doom, Ward: &ward}); err != nil {
+		t.Fatalf("update global state: %v", err)
+	}
+
+	reloaded, err := NewManagerWithStore(context.Background(), store)
+	if err != nil {
+		t.Fatalf("reload manager: %v", err)
+	}
+	snapshot, err := reloaded.Snapshot("load1")
+	if err != nil {
+		t.Fatalf("snapshot reloaded room: %v", err)
+	}
+	if snapshot.Global.Doom != doom || snapshot.Global.Ward != ward {
+		t.Fatalf("reloaded global = %+v, want doom=%d ward=%d", snapshot.Global, doom, ward)
+	}
+	if len(snapshot.Players) != 1 {
+		t.Fatalf("reloaded players = %d, want 1", len(snapshot.Players))
+	}
+	if snapshot.Players[0].Connected {
+		t.Fatal("reloaded player should start disconnected")
+	}
+	if snapshot.Players[0].ClassID == nil || *snapshot.Players[0].ClassID != 4 {
+		t.Fatalf("reloaded class = %v, want 4", snapshot.Players[0].ClassID)
+	}
+	if snapshot.GameScreens != 0 {
+		t.Fatalf("reloaded connected game screens = %d, want 0", snapshot.GameScreens)
+	}
+
+	reconnected, err := reloaded.Join(JoinRequest{
+		RoomCode:       "LOAD1",
+		PIN:            "123456",
+		Role:           RolePlayer,
+		ReconnectToken: player.Session.ReconnectToken,
+	}, &testSender{})
+	if err != nil {
+		t.Fatalf("reconnect persisted player: %v", err)
+	}
+	if !reconnected.Reconnected {
+		t.Fatal("persisted player reconnect was not recognized")
+	}
+	if reconnected.Session.Seat == nil || *reconnected.Session.Seat != *player.Session.Seat {
+		t.Fatalf("reconnected seat = %v, want %d", reconnected.Session.Seat, *player.Session.Seat)
 	}
 }
