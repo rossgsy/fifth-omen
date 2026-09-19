@@ -222,7 +222,7 @@ const PlayerRoster = () => {
             <p class="text-center text-xs uppercase tracking-[0.18em] text-zinc-600">
                 Seats
             </p>
-            <div class="grid grid-cols-2 gap-2">
+            <div class="grid gap-2">
                 <For each={seats()}>
                     {(seat) => {
                         const player = () => seat.player;
@@ -230,28 +230,28 @@ const PlayerRoster = () => {
                         const seatLabel = () => `Seat ${seat.seat + 1}`;
                         const icon = () => playbook()?.icon || "mdi:seat";
                         const status = () => player()?.connected
-                            ? "Occupied"
-                            : playbook()
-                                ? "Open"
-                                : "Empty";
+                        const subtext = () => {
+                            const playerName = player()?.name?.trim();
+                            if (playerName) return `${playerName}`;
+                            return seatLabel();
+                        };
 
                         return (
                             <div class={player()?.connected
-                                ? "grid aspect-square grid-rows-[auto_1fr_auto] place-items-center gap-1 border border-zinc-700 bg-zinc-950 p-2 text-center"
-                                : "grid aspect-square grid-rows-[auto_1fr_auto] place-items-center gap-1 border border-zinc-800 bg-zinc-950/70 p-2 text-center opacity-60"}
+                                ? "grid grid-cols-[1.5rem_minmax(0,1fr)] items-center gap-2 border border-zinc-700 bg-zinc-950 p-2"
+                                : "grid grid-cols-[1.5rem_minmax(0,1fr)] items-center gap-2 border border-zinc-800 bg-zinc-950/70 p-2 opacity-60"}
                             >
-                                <Icon icon={icon()} class="text-4xl text-zinc-100" />
-                                <div class="grid min-h-0 content-center gap-1">
-                                    <p class="text-xs uppercase tracking-[0.16em] text-zinc-600">
-                                        {seatLabel()}
-                                    </p>
-                                    <p class="gothic-sub-heading line-clamp-2 text-sm leading-tight text-zinc-100">
-                                        {playbook()?.name ?? "Open"}
+                                <Icon icon={icon()} class="text-xl text-zinc-100" />
+                                <div class="min-w-0">
+                                    <div class="flex min-w-0 items-baseline justify-between gap-2">
+                                        <p class="min-w-0 truncate text-xs font-semibold leading-tight text-zinc-100">
+                                            {playbook()?.name ?? "Open"}
+                                        </p>
+                                    </div>
+                                    <p class="mt-0.5 truncate text-[0.6rem] uppercase leading-tight tracking-[0.08em] text-zinc-600">
+                                        {subtext()}
                                     </p>
                                 </div>
-                                <span class="text-[0.62rem] uppercase tracking-[0.16em] text-zinc-600">
-                                    {status()}
-                                </span>
                             </div>
                         );
                     }}
