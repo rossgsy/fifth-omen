@@ -46,6 +46,9 @@ docker run --rm -p 8080:8080 rossgsy/fifth-omen-server:local
 ## Routes
 
 - `GET /healthz` returns a JSON health response.
+- `GET /api/rules` returns the complete folio and playbook rules catalog.
+- `GET /api/rules/folio.json` returns the folio rules.
+- `GET /api/rules/playbooks.json` returns the playbook rules.
 - `GET /admin/login` shows the admin login page.
 - `GET /admin/rooms` shows the admin room dashboard.
 - `POST /admin/rooms` creates a room from the dashboard form.
@@ -80,6 +83,14 @@ Server messages:
 - `joined`: sent to the connecting device with its session, room state, and reconnect token.
 - `room_state`: broadcast when devices join, leave, or reconnect.
 - `pong`: sent in response to a client `{"type":"ping"}` message.
+- `room_state`: includes the room's shared `global` trackers (`doom` and `ward`).
+
+A connected game screen can update one or both shared trackers. Values must be
+between 0 and 10; omitted values are left unchanged:
+
+```json
+{"type":"set_global_state","doom":3,"ward":5}
+```
 
 ## WebSockets
 

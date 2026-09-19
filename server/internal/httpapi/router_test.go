@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"io"
 	"log"
 	"net/http"
@@ -11,6 +12,40 @@ import (
 
 	"github.com/rossgsy/fifth-omen/server/internal/game"
 )
+
+func TestRulesEndpointsServeCatalog(t *testing.T) {
+	router := NewRouter(log.New(io.Discard, "", 0), game.NewManager(), "")
+
+	for _, target := range []string{"/api/rules/folio.json", "/api/rules/playbooks.json"} {
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		resp := httptest.NewRecorder()
+		router.ServeHTTP(resp, req)
+
+		if resp.Code != http.StatusOK {
+			t.Fatalf("GET %s status = %d, want %d", target, resp.Code, http.StatusOK)
+		}
+		if contentType := resp.Header().Get("Content-Type"); contentType != "application/json" {
+			t.Fatalf("GET %s content type = %q", target, contentType)
+		}
+		if !json.Valid(resp.Body.Bytes()) {
+			t.Fatalf("GET %s returned invalid JSON", target)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/rules", nil)
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	var bundle struct {
+		Folio     map[string]any `json:"folio"`
+		Playbooks []any          `json:"playbooks"`
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &bundle); err != nil {
+		t.Fatalf("decode rules bundle: %v", err)
+	}
+	if bundle.Folio["name"] == nil || len(bundle.Playbooks) == 0 {
+		t.Fatalf("rules bundle is incomplete: folio=%v playbooks=%d", bundle.Folio["name"], len(bundle.Playbooks))
+	}
+}
 
 func TestAdminLoginCreateListAndDeleteRoom(t *testing.T) {
 	manager := game.NewManager()

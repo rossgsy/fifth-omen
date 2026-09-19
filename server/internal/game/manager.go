@@ -30,13 +30,30 @@ type Manager struct {
 }
 
 type Room struct {
-	Code        string
-	PIN         string
-	MaxSeats    int
+	Code     string
+	PIN      string
+	MaxSeats int
+	state    roomState
+}
+
+// roomState is the single mutable state for a room. Keeping all session and
+// game data here makes room transitions atomic under Manager.mu.
+type roomState struct {
+	Global      GlobalState
 	players     map[int]*Player
 	playerToken map[string]*Player
 	playerClass map[int]*Player
 	screens     map[string]*GameScreen
+}
+
+type GlobalState struct {
+	Doom int `json:"doom"`
+	Ward int `json:"ward"`
+}
+
+type GlobalStateUpdate struct {
+	Doom *int `json:"doom,omitempty"`
+	Ward *int `json:"ward,omitempty"`
 }
 
 type Player struct {
@@ -98,6 +115,7 @@ type RoomSnapshot struct {
 	MaxSeats    int              `json:"maxSeats"`
 	Players     []PlayerSnapshot `json:"players"`
 	GameScreens int              `json:"gameScreens"`
+	Global      GlobalState      `json:"global"`
 }
 
 type AdminRoomSnapshot struct {
@@ -168,13 +186,15 @@ func (m *Manager) CreateRoom(req CreateRoomRequest) (CreateRoomResult, error) {
 	}
 
 	room := &Room{
-		Code:        code,
-		PIN:         pin,
-		MaxSeats:    maxSeats,
-		players:     make(map[int]*Player),
-		playerToken: make(map[string]*Player),
-		playerClass: make(map[int]*Player),
-		screens:     make(map[string]*GameScreen),
+		Code:     code,
+		PIN:      pin,
+		MaxSeats: maxSeats,
+		state: roomState{
+			players:     make(map[int]*Player),
+			playerToken: make(map[string]*Player),
+			playerClass: make(map[int]*Player),
+			screens:     make(map[string]*GameScreen),
+		},
 	}
 	m.rooms[code] = room
 
@@ -260,7 +280,7 @@ func (m *Manager) Leave(sessionID string) {
 	switch session.Role {
 	case RolePlayer:
 		if session.Seat != nil {
-			if player := room.players[*session.Seat]; player != nil && player.Token == session.ReconnectToken {
+			if player := room.state.players[*session.Seat]; player != nil && player.Token == session.ReconnectToken {
 				if player.sender != session.sender {
 					break
 				}
@@ -268,7 +288,7 @@ func (m *Manager) Leave(sessionID string) {
 			}
 		}
 	case RoleGameScreen:
-		if screen := room.screens[session.ReconnectToken]; screen != nil {
+		if screen := room.state.screens[session.ReconnectToken]; screen != nil {
 			if screen.sender != session.sender {
 				break
 			}
@@ -302,12 +322,12 @@ func (m *Manager) ReleaseSession(sessionID string) {
 	switch session.Role {
 	case RolePlayer:
 		if session.Seat != nil {
-			if player := room.players[*session.Seat]; player != nil && player.Token == session.ReconnectToken {
+			if player := room.state.players[*session.Seat]; player != nil && player.Token == session.ReconnectToken {
 				room.releasePlayer(player)
 			}
 		}
 	case RoleGameScreen:
-		delete(room.screens, session.ReconnectToken)
+		delete(room.state.screens, session.ReconnectToken)
 	}
 
 	senders := room.senders()
@@ -396,23 +416,56 @@ func (m *Manager) ClaimClass(sessionID string, classID int) (RoomSnapshot, error
 		m.mu.Unlock()
 		return RoomSnapshot{}, ErrRoomNotFound
 	}
-	player := room.players[*session.Seat]
+	player := room.state.players[*session.Seat]
 	if player == nil || player.Token != session.ReconnectToken {
 		m.mu.Unlock()
 		return RoomSnapshot{}, ErrInvalidJoin
 	}
-	if existing := room.playerClass[classID]; existing != nil && existing != player {
+	if existing := room.state.playerClass[classID]; existing != nil && existing != player {
 		m.mu.Unlock()
 		return RoomSnapshot{}, ErrClassTaken
 	}
 
 	if player.ClassID != nil {
-		delete(room.playerClass, *player.ClassID)
+		delete(room.state.playerClass, *player.ClassID)
 	}
 	classCopy := classID
 	player.ClassID = &classCopy
 	session.ClassID = &classCopy
-	room.playerClass[classID] = player
+	room.state.playerClass[classID] = player
+
+	snapshot := room.snapshot()
+	senders := room.senders()
+	m.mu.Unlock()
+
+	broadcast(senders, RoomEvent{Type: "room_state", Room: snapshot})
+	return snapshot, nil
+}
+
+// UpdateGlobalState applies one atomic room-state transition. Only a game
+// screen may change shared trackers, and omitted fields retain their values.
+func (m *Manager) UpdateGlobalState(sessionID string, update GlobalStateUpdate) (RoomSnapshot, error) {
+	if (update.Doom == nil && update.Ward == nil) || !validTracker(update.Doom) || !validTracker(update.Ward) {
+		return RoomSnapshot{}, ErrInvalidGameState
+	}
+
+	m.mu.Lock()
+	session := m.sessions[sessionID]
+	if session == nil || session.Role != RoleGameScreen {
+		m.mu.Unlock()
+		return RoomSnapshot{}, ErrInvalidJoin
+	}
+	room := m.rooms[session.RoomCode]
+	if room == nil {
+		m.mu.Unlock()
+		return RoomSnapshot{}, ErrRoomNotFound
+	}
+	if update.Doom != nil {
+		room.state.Global.Doom = *update.Doom
+	}
+	if update.Ward != nil {
+		room.state.Global.Ward = *update.Ward
+	}
 
 	snapshot := room.snapshot()
 	senders := room.senders()
@@ -440,10 +493,10 @@ func (r *Room) joinPlayer(reconnectToken string, classID *int, sender Sender) (J
 		if *classID < 0 {
 			return JoinResult{}, ErrInvalidClass
 		}
-		player = r.playerClass[*classID]
+		player = r.state.playerClass[*classID]
 	}
 	if player == nil {
-		player = r.playerToken[reconnectToken]
+		player = r.state.playerToken[reconnectToken]
 	}
 	if reconnectToken != "" && player == nil {
 		return JoinResult{}, ErrReconnectNotFound
@@ -472,10 +525,10 @@ func (r *Room) joinPlayer(reconnectToken string, classID *int, sender Sender) (J
 		if classID != nil {
 			classCopy := *classID
 			player.ClassID = &classCopy
-			r.playerClass[classCopy] = player
+			r.state.playerClass[classCopy] = player
 		}
-		r.players[seat] = player
-		r.playerToken[token] = player
+		r.state.players[seat] = player
+		r.state.playerToken[token] = player
 	} else {
 		reconnected = true
 	}
@@ -510,7 +563,7 @@ func (r *Room) joinPlayer(reconnectToken string, classID *int, sender Sender) (J
 
 func (r *Room) joinGameScreen(reconnectToken string, sender Sender) (JoinResult, error) {
 	reconnected := false
-	screen := r.screens[reconnectToken]
+	screen := r.state.screens[reconnectToken]
 	if reconnectToken != "" && screen == nil {
 		return JoinResult{}, ErrReconnectNotFound
 	}
@@ -528,7 +581,7 @@ func (r *Room) joinGameScreen(reconnectToken string, sender Sender) (JoinResult,
 			Token:    token,
 			DeviceID: deviceID,
 		}
-		r.screens[token] = screen
+		r.state.screens[token] = screen
 	} else {
 		reconnected = true
 	}
@@ -559,16 +612,16 @@ func (r *Room) joinGameScreen(reconnectToken string, sender Sender) (JoinResult,
 }
 
 func (r *Room) releasePlayer(player *Player) {
-	delete(r.players, player.Seat)
-	delete(r.playerToken, player.Token)
+	delete(r.state.players, player.Seat)
+	delete(r.state.playerToken, player.Token)
 	if player.ClassID != nil {
-		delete(r.playerClass, *player.ClassID)
+		delete(r.state.playerClass, *player.ClassID)
 	}
 }
 
 func (r *Room) nextSeat() (int, bool) {
 	for seat := 0; seat < r.MaxSeats; seat++ {
-		if _, ok := r.players[seat]; !ok {
+		if _, ok := r.state.players[seat]; !ok {
 			return seat, true
 		}
 	}
@@ -576,9 +629,9 @@ func (r *Room) nextSeat() (int, bool) {
 }
 
 func (r *Room) snapshot() RoomSnapshot {
-	players := make([]PlayerSnapshot, 0, len(r.players))
+	players := make([]PlayerSnapshot, 0, len(r.state.players))
 	for seat := 0; seat < r.MaxSeats; seat++ {
-		player := r.players[seat]
+		player := r.state.players[seat]
 		if player == nil {
 			continue
 		}
@@ -591,7 +644,7 @@ func (r *Room) snapshot() RoomSnapshot {
 	}
 
 	gameScreens := 0
-	for _, screen := range r.screens {
+	for _, screen := range r.state.screens {
 		if screen.Connected {
 			gameScreens++
 		}
@@ -602,6 +655,7 @@ func (r *Room) snapshot() RoomSnapshot {
 		MaxSeats:    r.MaxSeats,
 		Players:     players,
 		GameScreens: gameScreens,
+		Global:      r.state.Global,
 	}
 }
 
@@ -613,13 +667,13 @@ func (r *Room) adminSnapshot() AdminRoomSnapshot {
 }
 
 func (r *Room) senders() []Sender {
-	senders := make([]Sender, 0, len(r.players)+len(r.screens))
-	for _, player := range r.players {
+	senders := make([]Sender, 0, len(r.state.players)+len(r.state.screens))
+	for _, player := range r.state.players {
 		if player.Connected && player.sender != nil {
 			senders = append(senders, player.sender)
 		}
 	}
-	for _, screen := range r.screens {
+	for _, screen := range r.state.screens {
 		if screen.Connected && screen.sender != nil {
 			senders = append(senders, screen.sender)
 		}
@@ -628,7 +682,7 @@ func (r *Room) senders() []Sender {
 }
 
 func (r *Room) sendersExcept(excluded Sender) []Sender {
-	senders := make([]Sender, 0, len(r.players)+len(r.screens))
+	senders := make([]Sender, 0, len(r.state.players)+len(r.state.screens))
 	for _, sender := range r.senders() {
 		if sender != excluded {
 			senders = append(senders, sender)
@@ -649,6 +703,10 @@ func copyInt(value *int) *int {
 	}
 	copy := *value
 	return &copy
+}
+
+func validTracker(value *int) bool {
+	return value == nil || (*value >= 0 && *value <= 10)
 }
 
 func normalizeRoomCode(code string) string {

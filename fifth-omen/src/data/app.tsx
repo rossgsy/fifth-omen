@@ -53,6 +53,10 @@ export interface RoomState {
     code: string;
     maxSeats: number;
     gameScreens: number;
+    global: {
+        doom: number;
+        ward: number;
+    };
     players: Array<{
         seat: number;
         deviceId: string;

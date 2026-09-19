@@ -1,5 +1,4 @@
-import folioConfig from "./config/folio.json";
-import playbookConfig from "./config/playbooks.json";
+import { gameRulesUrl } from "./config/server";
 
 export const MajorArcana = [
     "The Fool",
@@ -98,9 +97,29 @@ export interface Folio {
     }
 }
 
-export const playbooks = playbookConfig as Playbook[];
+export let playbooks: Playbook[] = [];
 
-export const Folio1 = folioConfig as Folio;
+export let Folio1: Folio = {
+    name: "",
+    entities: {},
+    encounters: {},
+    arcanas: {},
+};
+
+export const loadGameRules = async () => {
+    const response = await fetch(gameRulesUrl());
+    if (!response.ok) {
+        throw new Error(`Could not load game rules (${response.status}).`);
+    }
+
+    const rules = await response.json() as { folio?: unknown; playbooks?: unknown };
+    if (!rules.folio || typeof rules.folio !== "object" || !Array.isArray(rules.playbooks)) {
+        throw new Error("The game server returned invalid rules data.");
+    }
+
+    Folio1 = rules.folio as Folio;
+    playbooks = rules.playbooks as Playbook[];
+};
 
 // used to lookup the major arcana
 export const numeral_to_number: (value: string) => number = (value) => {

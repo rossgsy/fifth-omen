@@ -6,3 +6,12 @@ const sameOriginWsUrl = () => {
 };
 
 export const gameWsUrl = () => envWsUrl || sameOriginWsUrl();
+
+export const gameRulesUrl = () => {
+    const url = new URL(gameWsUrl(), window.location.href);
+    url.protocol = url.protocol === "wss:" ? "https:" : "http:";
+    url.pathname = "/api/rules";
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+};

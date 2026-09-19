@@ -14,14 +14,24 @@ import (
 	"time"
 
 	"github.com/rossgsy/fifth-omen/server/internal/game"
+	"github.com/rossgsy/fifth-omen/server/internal/rules"
 	"github.com/rossgsy/fifth-omen/server/internal/ws"
 )
 
-func NewRouter(logger *log.Logger, manager *game.Manager, adminPassword string) http.Handler {
+func NewRouter(logger *log.Logger, manager *game.Manager, adminPassword string, catalogs ...*rules.Catalog) http.Handler {
 	mux := http.NewServeMux()
 	admin := adminHandler(adminPassword)
+	catalog := rules.MustLoad()
+	if len(catalogs) > 0 && catalogs[0] != nil {
+		catalog = catalogs[0]
+	}
 
 	mux.HandleFunc("/healthz", health)
+	mux.HandleFunc("GET /api/rules", serveRulesBundle(catalog))
+	mux.HandleFunc("GET /api/rules/folio", serveRulesFile(catalog.Folio))
+	mux.HandleFunc("GET /api/rules/folio.json", serveRulesFile(catalog.Folio))
+	mux.HandleFunc("GET /api/rules/playbooks", serveRulesFile(catalog.Playbooks))
+	mux.HandleFunc("GET /api/rules/playbooks.json", serveRulesFile(catalog.Playbooks))
 	mux.HandleFunc("GET /admin/login", adminLoginPage(adminPassword))
 	mux.HandleFunc("POST /admin/login", adminLogin(adminPassword))
 	mux.HandleFunc("POST /admin/logout", adminLogout)
@@ -32,6 +42,26 @@ func NewRouter(logger *log.Logger, manager *game.Manager, adminPassword string) 
 	mux.HandleFunc("/ws", ws.Handler(logger, manager))
 
 	return recoverer(logger, requestLogger(logger, mux))
+}
+
+func serveRulesBundle(catalog *rules.Catalog) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		setRulesHeaders(w)
+		_ = json.NewEncoder(w).Encode(catalog.Bundle())
+	}
+}
+
+func serveRulesFile(load func() json.RawMessage) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		setRulesHeaders(w)
+		_, _ = w.Write(load())
+	}
+}
+
+func setRulesHeaders(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 }
 
 func health(w http.ResponseWriter, _ *http.Request) {

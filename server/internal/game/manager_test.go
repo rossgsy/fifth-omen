@@ -102,3 +102,73 @@ func TestInvalidReconnectTokenIsRejected(t *testing.T) {
 		t.Fatalf("join with invalid reconnect token error = %v, want %v", err, ErrReconnectNotFound)
 	}
 }
+
+func TestGameScreenUpdatesGlobalState(t *testing.T) {
+	manager := NewManager()
+	if _, err := manager.CreateRoom(CreateRoomRequest{Code: "STATE", PIN: "123456"}); err != nil {
+		t.Fatalf("create room: %v", err)
+	}
+
+	screenSender := &testSender{}
+	screen, err := manager.Join(JoinRequest{
+		RoomCode: "STATE",
+		PIN:      "123456",
+		Role:     RoleGameScreen,
+	}, screenSender)
+	if err != nil {
+		t.Fatalf("join game screen: %v", err)
+	}
+	playerSender := &testSender{}
+	player, err := manager.Join(JoinRequest{
+		RoomCode: "STATE",
+		PIN:      "123456",
+		Role:     RolePlayer,
+	}, playerSender)
+	if err != nil {
+		t.Fatalf("join player: %v", err)
+	}
+
+	doom, ward := 4, 7
+	snapshot, err := manager.UpdateGlobalState(screen.Session.ID, GlobalStateUpdate{Doom: &doom, Ward: &ward})
+	if err != nil {
+		t.Fatalf("update global state: %v", err)
+	}
+	if snapshot.Global.Doom != doom || snapshot.Global.Ward != ward {
+		t.Fatalf("global state = %+v, want doom=%d ward=%d", snapshot.Global, doom, ward)
+	}
+	if len(screenSender.sent) == 0 || len(playerSender.sent) == 0 {
+		t.Fatal("global state update was not broadcast to all devices")
+	}
+
+	invalid := 11
+	if _, err := manager.UpdateGlobalState(screen.Session.ID, GlobalStateUpdate{Doom: &invalid}); err != ErrInvalidGameState {
+		t.Fatalf("invalid tracker error = %v, want %v", err, ErrInvalidGameState)
+	}
+	if _, err := manager.UpdateGlobalState(player.Session.ID, GlobalStateUpdate{Doom: &doom}); err != ErrInvalidJoin {
+		t.Fatalf("player update error = %v, want %v", err, ErrInvalidJoin)
+	}
+}
+
+func TestGlobalStateSurvivesDisconnects(t *testing.T) {
+	manager := NewManager()
+	if _, err := manager.CreateRoom(CreateRoomRequest{Code: "STATE", PIN: "123456"}); err != nil {
+		t.Fatalf("create room: %v", err)
+	}
+	screen, err := manager.Join(JoinRequest{RoomCode: "STATE", PIN: "123456", Role: RoleGameScreen}, &testSender{})
+	if err != nil {
+		t.Fatalf("join game screen: %v", err)
+	}
+	ward := 3
+	if _, err := manager.UpdateGlobalState(screen.Session.ID, GlobalStateUpdate{Ward: &ward}); err != nil {
+		t.Fatalf("update global state: %v", err)
+	}
+
+	manager.Leave(screen.Session.ID)
+	snapshot, err := manager.Snapshot("STATE")
+	if err != nil {
+		t.Fatalf("snapshot: %v", err)
+	}
+	if snapshot.Global.Ward != ward {
+		t.Fatalf("ward after disconnect = %d, want %d", snapshot.Global.Ward, ward)
+	}
+}

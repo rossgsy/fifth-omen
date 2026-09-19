@@ -25,6 +25,8 @@ type ServerMessage struct {
 type ClientMessage struct {
 	Type    string `json:"type"`
 	ClassID *int   `json:"classId,omitempty"`
+	Doom    *int   `json:"doom,omitempty"`
+	Ward    *int   `json:"ward,omitempty"`
 }
 
 type client struct {
@@ -161,6 +163,21 @@ func (c *client) readLoop(ctx context.Context, manager *game.Manager, sessionID 
 				},
 			})
 		}
+		if msg.Type == "set_global_state" {
+			_, err := manager.UpdateGlobalState(sessionID, game.GlobalStateUpdate{
+				Doom: msg.Doom,
+				Ward: msg.Ward,
+			})
+			if err != nil {
+				c.Send(ServerMessage{
+					Type: "error",
+					Data: map[string]string{
+						"code":    errorCode(err),
+						"message": err.Error(),
+					},
+				})
+			}
+		}
 	}
 }
 
@@ -203,6 +220,8 @@ func errorCode(err error) string {
 		return "class_taken"
 	case errors.Is(err, game.ErrInvalidClass):
 		return "invalid_class"
+	case errors.Is(err, game.ErrInvalidGameState):
+		return "invalid_game_state"
 	default:
 		return "unknown"
 	}

@@ -12,6 +12,7 @@ import (
 
 	"github.com/rossgsy/fifth-omen/server/internal/game"
 	"github.com/rossgsy/fifth-omen/server/internal/httpapi"
+	"github.com/rossgsy/fifth-omen/server/internal/rules"
 )
 
 var gitCommit = "unknown"
@@ -19,6 +20,10 @@ var gitCommit = "unknown"
 func main() {
 	logger := log.New(os.Stdout, "fifth-omen-server ", log.LstdFlags|log.LUTC|log.Lshortfile)
 	manager := game.NewManager()
+	catalog, err := rules.Load()
+	if err != nil {
+		logger.Fatalf("load game rules: %v", err)
+	}
 
 	addr := env("HTTP_ADDR", ":8080")
 	adminPassword := os.Getenv("ADMIN_PASSWORD")
@@ -27,7 +32,7 @@ func main() {
 	}
 	server := &http.Server{
 		Addr:              addr,
-		Handler:           httpapi.NewRouter(logger, manager, adminPassword),
+		Handler:           httpapi.NewRouter(logger, manager, adminPassword, catalog),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

@@ -224,6 +224,13 @@ const GameSheetRoute = () => {
             ...appContext.contextValue(),
             ...value,
         });
+
+        const globalUpdate: { doom?: number; ward?: number } = {};
+        if (typeof value.globalDoom === "number") globalUpdate.doom = value.globalDoom;
+        if (typeof value.globalWard === "number") globalUpdate.ward = value.globalWard;
+        if (globalUpdate.doom !== undefined || globalUpdate.ward !== undefined) {
+            window.dispatchEvent(new CustomEvent("fifth-omen:update-global-state", { detail: globalUpdate }));
+        }
     };
 
     const cardOptions = createMemo(() => (

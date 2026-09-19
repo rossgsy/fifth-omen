@@ -21,6 +21,7 @@ type FullscreenElement = HTMLElement & {
 
 const SHARE_URL = "https://fifth-omen.lab-2.paleglyph.com/";
 const JOIN_TIMEOUT_MS = 8000;
+const UPDATE_GLOBAL_STATE_EVENT = "fifth-omen:update-global-state";
 
 const roomCodeFromUrl = () => new URLSearchParams(window.location.search).get("room")?.trim().toUpperCase() ?? "";
 
@@ -179,9 +180,13 @@ const AppInner: Component = () => {
 
 const updateRoomState = (appContext: AppContextStore | undefined, roomState: RoomState | null) => {
   if (!appContext) return;
+
+  const global = roomState?.global;
   appContext.setContextValue({
     ...appContext.contextValue(),
     roomState,
+    globalDoom: typeof global?.doom === "number" ? global.doom : appContext.contextValue().globalDoom,
+    globalWard: typeof global?.ward === "number" ? global.ward : appContext.contextValue().globalWard,
   });
 };
 
@@ -448,12 +453,21 @@ const GameScreenConnectionManager: Component = () => {
     closeSocket();
   };
 
+  const handleGlobalStateUpdate = (event: Event) => {
+    if (socket?.readyState !== WebSocket.OPEN) return;
+    const detail = (event as CustomEvent<{ doom?: number; ward?: number }>).detail;
+    if (!detail) return;
+    socket.send(JSON.stringify({ type: "set_global_state", ...detail }));
+  };
+
   onMount(() => {
     window.addEventListener("fifth-omen:leave-room", handleLeaveRoom);
+    window.addEventListener(UPDATE_GLOBAL_STATE_EVENT, handleGlobalStateUpdate);
   });
 
   onCleanup(() => {
     window.removeEventListener("fifth-omen:leave-room", handleLeaveRoom);
+    window.removeEventListener(UPDATE_GLOBAL_STATE_EVENT, handleGlobalStateUpdate);
   });
 
   const submitConnection = (event: SubmitEvent) => {
