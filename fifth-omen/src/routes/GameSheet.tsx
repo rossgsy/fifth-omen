@@ -5,11 +5,11 @@ import { AppContext } from "../data/app";
 import {
     EntityResource,
     Folio1,
-    MajorArcana,
     lookup_arcana_for_card,
     lookup_encounter_for_card,
     lookup_entity_key_for_card,
     number_to_numeral,
+    tarotCardName,
     playbooks,
 } from "../game";
 
@@ -163,7 +163,13 @@ const EntityReferenceList = (props: {
 const PlayerRoster = () => {
     const appContext = useContext(AppContext);
     const players = createMemo(() => appContext?.contextValue().roomState?.players ?? []);
-    const currentRitualPlayerSeat = createMemo(() => appContext?.contextValue().roomState?.ritual?.currentPlayerSeat ?? null);
+    const activePlayerSeat = createMemo(() => {
+        const room = appContext?.contextValue().roomState;
+        if (room?.ritual?.phase === "entity" && typeof room.entity?.currentPlayerSeat === "number") {
+            return room.entity.currentPlayerSeat;
+        }
+        return room?.ritual?.currentPlayerSeat ?? null;
+    });
     const seats = createMemo(() => {
         const maxSeats = appContext?.contextValue().roomState?.maxSeats ?? 6;
         return Array.from({ length: maxSeats }, (_, seat) => {
@@ -193,8 +199,8 @@ const PlayerRoster = () => {
                         };
 
                         return (
-                            <div class={currentRitualPlayerSeat() === seat.seat
-                                ? "grid grid-cols-[1.5rem_minmax(0,1fr)] items-center gap-2 border border-zinc-300 bg-zinc-900 p-2"
+                            <div class={activePlayerSeat() === seat.seat
+                                ? "grid grid-cols-[1.5rem_minmax(0,1fr)] items-center gap-2 border-2 border-amber-300 bg-amber-950/40 p-2 shadow-[0_0_18px_rgba(252,211,77,0.24)]"
                                 : player()?.connected
                                     ? "grid grid-cols-[1.5rem_minmax(0,1fr)] items-center gap-2 border border-zinc-700 bg-zinc-950 p-2"
                                     : "grid grid-cols-[1.5rem_minmax(0,1fr)] items-center gap-2 border border-zinc-800 bg-zinc-950/70 p-2 opacity-60"}
@@ -205,6 +211,11 @@ const PlayerRoster = () => {
                                         <p class="min-w-0 truncate text-xs font-semibold leading-tight text-zinc-100">
                                             {playbook()?.name ?? "Open"}
                                         </p>
+                                        <Show when={activePlayerSeat() === seat.seat}>
+                                            <span class="shrink-0 text-[0.55rem] font-bold uppercase tracking-[0.14em] text-amber-200">
+                                                Active
+                                            </span>
+                                        </Show>
                                     </div>
                                     <p class="mt-0.5 truncate text-[0.6rem] uppercase leading-tight tracking-[0.08em] text-zinc-600">
                                         {subtext()}
@@ -276,7 +287,7 @@ const GameSheetRoute = () => {
             return {
                 slotTitle: index === 0 ? "Second Card" : "Fourth Card",
                 numeral: number_to_numeral(tarotNumber),
-                cardName: MajorArcana[tarotNumber],
+                cardName: tarotCardName(tarotNumber),
                 isStricture: arcana?.is_stricture ?? false,
                 rule: arcana?.rule_face_up || arcana?.rule_face_down || "No arcana rule set for this card.",
             };

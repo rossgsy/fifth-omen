@@ -17,11 +17,19 @@ const (
 	RitualPhaseEncounter = "encounter"
 	RitualPhaseComplete  = "complete"
 
+	EntityPhaseDrafting = "drafting"
+	EntityPhaseActions  = "actions"
+	EntityPhaseEntity   = "entity"
+	EntityPhaseComplete = "complete"
+
 	DefaultMaxSeats = 6
 	MaxSeatsLimit   = 6
 	RoomCodeLength  = 5
 	PINLength       = 6
-	MaxTarotCard    = 21
+	// A full tarot deck has 22 major arcana plus 56 minor-arcana/court cards.
+	// Card values are deck indexes: 0-21 majors, then Wands, Cups, Swords,
+	// and Pentacles (Ace through King).
+	MaxTarotCard = 77
 )
 
 type Sender interface {
@@ -100,16 +108,31 @@ type RitualCard struct {
 type EntityMachine struct {
 	CardTarotNumber   int          `json:"cardTarotNumber"`
 	RitualStep        int          `json:"ritualStep"`
+	Phase             string       `json:"phase"`
+	Presence          int          `json:"presence"`
+	MaxPresence       int          `json:"maxPresence"`
+	FirstPlayerSeat   *int         `json:"firstPlayerSeat,omitempty"`
 	CurrentPlayerSeat *int         `json:"currentPlayerSeat,omitempty"`
 	TurnOrder         []int        `json:"turnOrder"`
 	CurrentTurn       int          `json:"currentTurn"`
+	DraftPass         int          `json:"draftPass"`
+	DraftingEntity    bool         `json:"draftingEntity"`
+	Hands             []EntityHand `json:"hands"`
+	EntityHand        EntityHand   `json:"entityHand"`
 	History           []EntityTurn `json:"history"`
 	Complete          bool         `json:"complete"`
 }
 
+type EntityHand struct {
+	Seat  *int `json:"seat,omitempty"`
+	Left  *int `json:"left,omitempty"`
+	Right *int `json:"right,omitempty"`
+}
+
 type EntityTurn struct {
-	Seat int    `json:"seat"`
-	Type string `json:"type"`
+	Seat           int    `json:"seat"`
+	Type           string `json:"type"`
+	PresenceDamage int    `json:"presenceDamage,omitempty"`
 }
 
 type Player struct {

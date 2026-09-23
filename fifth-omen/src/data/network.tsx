@@ -15,6 +15,10 @@ export interface NetworkStore {
   setGlobalState: (value: { doom?: number; ward?: number }) => void;
   revealRitualCard: (tarotNumber: number) => void;
   resolveRitualPhase: () => void;
+  draftEntityDie: (dieValue: number) => void;
+  draftEntityDieForEntity: (dieValue: number) => void;
+  resolveEntityPlayerAction: (presenceDamage: number) => void;
+  resolveEntityAction: () => void;
   leaveRoom: () => void;
   closeConnectionPrompt: () => void;
 }
@@ -83,6 +87,7 @@ export const NetworkProvider = (props: { children: JSX.Element }) => {
       currentPhase: ritual?.phase === "complete" ? ritual.drawnCards.length : ritual?.currentStep ?? current.currentPhase,
       activeArcanaCards: activeArcanaCards?.length ? activeArcanaCards : current.activeArcanaCards,
       activeEntityCard,
+      entityPresence: typeof roomState?.entity?.presence === "number" ? roomState.entity.presence : current.entityPresence,
     });
   };
   const updatePlayer = (value: Partial<PlayerConnection>) => {
@@ -126,7 +131,7 @@ export const NetworkProvider = (props: { children: JSX.Element }) => {
     socket.addEventListener("message", (event) => {
       if (gameScreenSocket !== socket) return;
       let message: any; try { message = JSON.parse(event.data); } catch { return; }
-      if (["room_state", "ritual_updated", "game_begun"].includes(message.type)) { updateRoomState(parseRoomState(message.room ?? message.data?.room)); return; }
+      if (["room_state", "ritual_updated", "entity_updated", "game_begun"].includes(message.type)) { updateRoomState(parseRoomState(message.room ?? message.data?.room)); return; }
       if (message.type === "error") {
         updateGameScreen({ status: gameScreenJoined ? "connected" : "error", error: message.data?.message || "The server rejected the connection.", reconnectToken: gameScreenJoined ? current.reconnectToken : "" });
         if (!gameScreenJoined) closeGameScreen(); return;
@@ -164,7 +169,7 @@ export const NetworkProvider = (props: { children: JSX.Element }) => {
     socket.addEventListener("message", (event) => {
       if (playerSocket !== socket) return;
       let message: any; try { message = JSON.parse(event.data); } catch { return; }
-      if (["room_state", "game_begun", "ritual_updated"].includes(message.type)) { updateRoomState(parseRoomState(message.room ?? message.data?.room)); return; }
+      if (["room_state", "game_begun", "ritual_updated", "entity_updated"].includes(message.type)) { updateRoomState(parseRoomState(message.room ?? message.data?.room)); return; }
       if (message.type === "seat_selected" || message.type === "class_selected") {
         const room = parseRoomState(message.data?.room); updateRoomState(room);
         updatePlayer({ seat: typeof message.data?.seat === "number" ? message.data.seat : app?.contextValue().playerConnection.seat, classId: typeof message.data?.classId === "number" ? message.data.classId : app?.contextValue().playerConnection.classId, reconnectToken: typeof message.data?.reconnectToken === "string" ? message.data.reconnectToken : app?.contextValue().playerConnection.reconnectToken, error: null }); return;
@@ -230,8 +235,12 @@ export const NetworkProvider = (props: { children: JSX.Element }) => {
   };
   const revealRitualCard = (tarotNumber: number) => sendPlayer("reveal_ritual_card", { tarotNumber });
   const resolveRitualPhase = () => sendPlayer("resolve_ritual_phase");
+  const draftEntityDie = (dieValue: number) => sendPlayer("draft_entity_die", { dieValue });
+  const draftEntityDieForEntity = (dieValue: number) => sendPlayer("draft_entity_die_for_entity", { dieValue });
+  const resolveEntityPlayerAction = (presenceDamage: number) => sendPlayer("resolve_entity_player_action", { presenceDamage });
+  const resolveEntityAction = () => sendPlayer("resolve_entity_action");
   onCleanup(() => {
     closePlayer(); closeGameScreen();
   });
-  return <NetworkContext.Provider value={{ joinPlayer, joinGameScreen, selectSeat, selectClass, beginGame, setGlobalState, revealRitualCard, resolveRitualPhase, leaveRoom, closeConnectionPrompt }}>{props.children}</NetworkContext.Provider>;
+  return <NetworkContext.Provider value={{ joinPlayer, joinGameScreen, selectSeat, selectClass, beginGame, setGlobalState, revealRitualCard, resolveRitualPhase, draftEntityDie, draftEntityDieForEntity, resolveEntityPlayerAction, resolveEntityAction, leaveRoom, closeConnectionPrompt }}>{props.children}</NetworkContext.Provider>;
 };

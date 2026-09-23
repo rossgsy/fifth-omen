@@ -56,6 +56,7 @@ export interface RoomState {
     maxSeats: number;
     phase?: "setup" | "playing";
     ritual?: RitualState;
+    entity?: EntityMachine;
     gameScreens: number;
     global: {
         doom: number;
@@ -69,6 +70,23 @@ export interface RoomState {
         playbookId?: number;
         connected: boolean;
     }>;
+}
+
+export interface EntityMachine {
+    cardTarotNumber: number;
+    ritualStep: number;
+    phase: "drafting" | "actions" | "entity" | "complete";
+    presence: number;
+    maxPresence: number;
+    firstPlayerSeat?: number;
+    currentPlayerSeat?: number;
+    turnOrder: number[];
+    currentTurn: number;
+    draftPass: number;
+    draftingEntity: boolean;
+    hands: Array<{ seat?: number; left?: number; right?: number }>;
+    entityHand: { left?: number; right?: number };
+    complete: boolean;
 }
 
 export interface RitualState {

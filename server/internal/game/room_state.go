@@ -173,26 +173,43 @@ func newEntityMachine(cardTarotNumber, ritualStep int, shared SharedGameState, c
 	if len(turnOrder) == 0 && currentSeat != nil {
 		turnOrder = []int{*currentSeat}
 	}
+	turnOrder = rotateSeats(turnOrder, currentSeat)
 	entity := &EntityMachine{
 		CardTarotNumber: cardTarotNumber,
 		RitualStep:      ritualStep,
+		Phase:           EntityPhaseDrafting,
+		MaxPresence:     entityPresence(cardTarotNumber, len(turnOrder)),
+		Presence:        entityPresence(cardTarotNumber, len(turnOrder)),
 		TurnOrder:       turnOrder,
-		CurrentTurn:     0,
+		CurrentTurn:     1,
+		DraftPass:       1,
+		Hands:           make([]EntityHand, len(turnOrder)),
+	}
+	for index, seat := range turnOrder {
+		entity.Hands[index].Seat = copyInt(&seat)
 	}
 	if len(turnOrder) > 0 {
+		entity.FirstPlayerSeat = copyInt(&turnOrder[0])
 		entity.CurrentPlayerSeat = copyInt(&turnOrder[0])
 	}
 	return entity
 }
 
-func (m *EntityMachine) resolveTurn() {
-	if m == nil || m.Complete {
-		return
+func entityPresence(cardTarotNumber, playerCount int) int {
+	bases := []int{10, 10, 12, 11}
+	return bases[cardTarotNumber%len(bases)] + 2*playerCount
+}
+
+func rotateSeats(seats []int, first *int) []int {
+	if first == nil || len(seats) == 0 {
+		return seats
 	}
-	if m.CurrentPlayerSeat != nil {
-		m.History = append(m.History, EntityTurn{Seat: *m.CurrentPlayerSeat, Type: "resolved"})
+	for index, seat := range seats {
+		if seat == *first {
+			return append(append([]int(nil), seats[index:]...), seats[:index]...)
+		}
 	}
-	m.Complete = true
+	return seats
 }
 
 func (m *EntityMachine) clone() *EntityMachine {
@@ -201,7 +218,17 @@ func (m *EntityMachine) clone() *EntityMachine {
 	}
 	clone := *m
 	clone.CurrentPlayerSeat = copyInt(m.CurrentPlayerSeat)
+	clone.FirstPlayerSeat = copyInt(m.FirstPlayerSeat)
 	clone.TurnOrder = append([]int(nil), m.TurnOrder...)
+	clone.Hands = append([]EntityHand(nil), m.Hands...)
+	for index := range clone.Hands {
+		clone.Hands[index].Seat = copyInt(m.Hands[index].Seat)
+		clone.Hands[index].Left = copyInt(m.Hands[index].Left)
+		clone.Hands[index].Right = copyInt(m.Hands[index].Right)
+	}
+	clone.EntityHand.Seat = copyInt(m.EntityHand.Seat)
+	clone.EntityHand.Left = copyInt(m.EntityHand.Left)
+	clone.EntityHand.Right = copyInt(m.EntityHand.Right)
 	clone.History = append([]EntityTurn(nil), m.History...)
 	return &clone
 }

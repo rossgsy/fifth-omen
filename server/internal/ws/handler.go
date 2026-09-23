@@ -23,12 +23,14 @@ type ServerMessage struct {
 }
 
 type ClientMessage struct {
-	Type        string `json:"type"`
-	ClassID     *int   `json:"classId,omitempty"`
-	Seat        *int   `json:"seat,omitempty"`
-	Doom        *int   `json:"doom,omitempty"`
-	Ward        *int   `json:"ward,omitempty"`
-	TarotNumber *int   `json:"tarotNumber,omitempty"`
+	Type           string `json:"type"`
+	ClassID        *int   `json:"classId,omitempty"`
+	Seat           *int   `json:"seat,omitempty"`
+	Doom           *int   `json:"doom,omitempty"`
+	Ward           *int   `json:"ward,omitempty"`
+	TarotNumber    *int   `json:"tarotNumber,omitempty"`
+	DieValue       *int   `json:"dieValue,omitempty"`
+	PresenceDamage *int   `json:"presenceDamage,omitempty"`
 }
 
 type client struct {
@@ -248,6 +250,38 @@ func (c *client) readLoop(ctx context.Context, manager *game.Manager, sessionID 
 					"room": room,
 				},
 			})
+		}
+		if msg.Type == "draft_entity_die" && msg.DieValue != nil {
+			room, err := manager.DraftEntityDie(sessionID, *msg.DieValue)
+			if err != nil {
+				c.Send(ServerMessage{Type: "error", Data: map[string]string{"code": errorCode(err), "message": err.Error()}})
+				continue
+			}
+			c.Send(ServerMessage{Type: "entity_updated", Data: map[string]any{"room": room}})
+		}
+		if msg.Type == "draft_entity_die_for_entity" && msg.DieValue != nil {
+			room, err := manager.DraftEntityDieForEntity(sessionID, *msg.DieValue)
+			if err != nil {
+				c.Send(ServerMessage{Type: "error", Data: map[string]string{"code": errorCode(err), "message": err.Error()}})
+				continue
+			}
+			c.Send(ServerMessage{Type: "entity_updated", Data: map[string]any{"room": room}})
+		}
+		if msg.Type == "resolve_entity_player_action" && msg.PresenceDamage != nil {
+			room, err := manager.ResolveEntityPlayerAction(sessionID, *msg.PresenceDamage)
+			if err != nil {
+				c.Send(ServerMessage{Type: "error", Data: map[string]string{"code": errorCode(err), "message": err.Error()}})
+				continue
+			}
+			c.Send(ServerMessage{Type: "entity_updated", Data: map[string]any{"room": room}})
+		}
+		if msg.Type == "resolve_entity_action" {
+			room, err := manager.ResolveEntityAction(sessionID)
+			if err != nil {
+				c.Send(ServerMessage{Type: "error", Data: map[string]string{"code": errorCode(err), "message": err.Error()}})
+				continue
+			}
+			c.Send(ServerMessage{Type: "entity_updated", Data: map[string]any{"room": room}})
 		}
 		if msg.Type == "set_global_state" {
 			_, err := manager.UpdateGlobalState(sessionID, game.GlobalStateUpdate{

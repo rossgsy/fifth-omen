@@ -27,9 +27,8 @@ func (m *RitualMachine) Reveal(tarotNumber int, shared SharedGameState) (*Entity
 	}
 }
 
-// Resolve closes the current entity or encounter phase and advances the ritual
-// to its next draw turn. An entity machine is completed as part of the same
-// atomic transition.
+// Resolve closes a completed entity or an encounter phase and advances the
+// ritual to its next draw turn.
 func (m *RitualMachine) Resolve(shared SharedGameState, entity *EntityMachine) error {
 	*m = m.normalized()
 	if m.Phase != RitualPhaseEntity && m.Phase != RitualPhaseEncounter || m.CurrentStep >= len(m.Steps) {
@@ -40,10 +39,9 @@ func (m *RitualMachine) Resolve(shared SharedGameState, entity *EntityMachine) e
 		return ErrInvalidGameState
 	}
 	if m.Phase == RitualPhaseEntity {
-		if entity == nil || entity.Complete {
+		if entity == nil || !entity.Complete {
 			return ErrInvalidGameState
 		}
-		entity.resolveTurn()
 	}
 
 	card.Resolved = true

@@ -1,6 +1,6 @@
 import { SectionHeading } from "../../ui";
 import { For, useContext, createSignal } from "solid-js";
-import { MajorArcana, number_to_numeral } from "../../../game";
+import { TarotDeck, number_to_numeral } from "../../../game";
 import { AppContext } from "../../../data/app";
 import { Button } from "../../ui";
 import { useNetwork } from "../../../data/network";
@@ -35,10 +35,10 @@ const PickRitualCard = () => {
             class="min-h-12 w-full border border-zinc-700 bg-zinc-950 px-4 text-lg text-zinc-100 outline-none focus:border-zinc-300"
         >
             <option value="">Select drawn card</option>
-            <For each={MajorArcana}>
+            <For each={TarotDeck}>
                 {(cardName, tarotNumber) => (
                     <option value={tarotNumber()}>
-                        {number_to_numeral(tarotNumber())} - {cardName}
+                        {tarotNumber() <= 21 ? `${number_to_numeral(tarotNumber())} - ` : ""}{cardName}
                     </option>
                 )}
             </For>

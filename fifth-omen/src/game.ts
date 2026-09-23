@@ -25,6 +25,18 @@ export const MajorArcana = [
     "The World"
 ]
 
+export const TarotDeck = [
+    ...MajorArcana,
+    ...["Wands", "Cups", "Swords", "Pentacles"].flatMap((suit) => [
+        `Ace of ${suit}`, `Two of ${suit}`, `Three of ${suit}`, `Four of ${suit}`,
+        `Five of ${suit}`, `Six of ${suit}`, `Seven of ${suit}`, `Eight of ${suit}`,
+        `Nine of ${suit}`, `Ten of ${suit}`, `Page of ${suit}`, `Knight of ${suit}`,
+        `Queen of ${suit}`, `King of ${suit}`,
+    ]),
+];
+
+export const tarotCardName = (value: number) => TarotDeck[value] ?? `Card ${value}`;
+
 export interface Action {
     requirement?: string;
     diceRule: string;

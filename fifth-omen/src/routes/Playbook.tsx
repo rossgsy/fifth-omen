@@ -60,10 +60,13 @@ const PlaybookRoute = () => {
     );
     const isResolvingRitualPlayer = () => (
         appContext?.contextValue().roomState?.phase === "playing"
-        && (ritual()?.phase === "entity" || ritual()?.phase === "encounter")
+        && ritual()?.phase === "encounter"
         && selectedSeat() !== null
         && ritual()?.currentPlayerSeat === selectedSeat()
     );
+    const entityMode = () => appContext?.contextValue().roomState?.entity ?? null;
+    const isCurrentEntityPlayer = () => selectedSeat() !== null && entityMode()?.currentPlayerSeat === selectedSeat();
+    const ownEntityHand = () => entityMode()?.hands.find((hand) => hand.seat === selectedSeat()) ?? null;
     const currentRitualStep = () => {
         const state = ritual();
         if (!state) return null;
@@ -203,11 +206,30 @@ const PlaybookRoute = () => {
                     <PlayerHeader
                         playbook={playbooks[appContext?.contextValue()?.selectedPlaybook!]}
                     />
-                    <WaitingForOthers
-                        title="The Circle Gathers"
-                        subtitle="When every omen-bearer has taken their place, open the rite."
-                        isSilent={true}
-                    />
+                    <Show when={selectedSeat() === 0} fallback={
+                        <WaitingForOthers
+                            title="The Circle Gathers"
+                            subtitle="Seat 1 opens the rite when the table is ready."
+                            isSilent={true}
+                        />
+                    }>
+                        <Panel as="section" class="grid min-h-[18rem] place-items-center p-6 text-center">
+                            <div class="grid max-w-md gap-5">
+                                <SectionHeading
+                                    eyebrow="Seat 1"
+                                    title="Open the Rite"
+                                    subtitle="You are the active player. Begin the game, then report the card you drew."
+                                    titleClass="text-3xl tracking-wide sm:text-4xl"
+                                />
+                                <Button
+                                    class="min-h-12 bg-zinc-100 uppercase tracking-[0.16em] text-zinc-950 hover:bg-zinc-300"
+                                    onClick={() => network?.beginGame()}
+                                >
+                                    Begin Game
+                                </Button>
+                            </div>
+                        </Panel>
+                    </Show>
                 </Page>
             </Match>
             <Match when={isCurrentRitualPlayer() && appContext?.contextValue()?.selectedPlaybook !== null}>
@@ -217,6 +239,45 @@ const PlaybookRoute = () => {
                             playbook={playbooks[appContext?.contextValue()?.selectedPlaybook!]}
                         />
                         <PickRitualCard />
+                    </Panel>
+                </Page>
+            </Match>
+            <Match when={ritual()?.phase === "entity" && entityMode() && appContext?.contextValue()?.selectedPlaybook !== null}>
+                <Page class="items-stretch justify-center gap-4">
+                    <Panel as="section" class="grid min-h-[26rem] place-items-center p-6 text-center">
+                        <div class="grid w-full max-w-md gap-5">
+                            <SectionHeading
+                                eyebrow={`Entity turn ${entityMode()!.currentTurn}`}
+                                title={entityMode()!.complete ? "Entity Defeated" : entityMode()!.phase === "drafting" ? `Draft ${entityMode()!.draftPass === 1 ? "Left Hand" : "Right Hand"}` : entityMode()!.phase === "actions" ? "Resolve Actions" : "Entity Phase"}
+                                subtitle={`Presence ${entityMode()!.presence}/${entityMode()!.maxPresence}`}
+                                titleClass="text-3xl tracking-wide sm:text-4xl"
+                            />
+                            <Show when={entityMode()!.phase === "drafting" && isCurrentEntityPlayer()} fallback={<WaitingForOthers title="Silent Draft" subtitle="Another player is choosing a die." isSilent={true} />}>
+                                <div class="grid gap-2">
+                                    <p class="text-sm text-zinc-400">{entityMode()!.draftingEntity ? "You are last in order: record the entity's die." : "Enter the face on the physical die you chose."} Your hand: L {ownEntityHand()?.left ?? "-"} / R {ownEntityHand()?.right ?? "-"}</p>
+                                    <div class="grid grid-cols-3 gap-2">
+                                        <For each={[1, 2, 3, 4, 5, 6]}>{(die) => <Button onClick={() => entityMode()!.draftingEntity ? network?.draftEntityDieForEntity(die) : network?.draftEntityDie(die)}>{die}</Button>}</For>
+                                    </div>
+                                </div>
+                            </Show>
+                            <Show when={entityMode()!.phase === "actions" && isCurrentEntityPlayer()}>
+                                <div class="grid gap-2">
+                                    <p class="text-sm text-zinc-400">Resolve your action, then report the Presence damage it dealt.</p>
+                                    <div class="grid grid-cols-4 gap-2">
+                                        <For each={[0, 1, 2, 3, 4, 5, 6]}>{(damage) => <Button disabled={damage > entityMode()!.presence} onClick={() => network?.resolveEntityPlayerAction(damage)}>{damage}</Button>}</For>
+                                    </div>
+                                </div>
+                            </Show>
+                            <Show when={entityMode()!.phase === "entity" && isCurrentEntityPlayer()}>
+                                <Button onClick={() => network?.resolveEntityAction()}>Resolve Entity Action</Button>
+                            </Show>
+                            <Show when={entityMode()!.complete && isCurrentEntityPlayer()}>
+                                <Button onClick={() => network?.resolveRitualPhase()}>Close Entity Mode</Button>
+                            </Show>
+                            <Show when={entityMode()!.phase !== "drafting" && !isCurrentEntityPlayer() && !entityMode()!.complete}>
+                                <WaitingForOthers title="Await the Turn" subtitle="Another player is resolving the phase." isSilent={true} />
+                            </Show>
+                        </div>
                     </Panel>
                 </Page>
             </Match>

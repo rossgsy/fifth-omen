@@ -284,6 +284,29 @@ func TestRitualFlowRevealsResolvesAndAdvancesPlayers(t *testing.T) {
 		t.Fatalf("entity machine after reveal = %+v, want entity card 3 controlled by seat 0", snapshot.Entity)
 	}
 
+	// Each player reports their physical die in order; the final player also
+	// reports the entity's die at the end of each draft pass.
+	for _, draft := range []struct {
+		sessionID string
+		entity    bool
+		value     int
+	}{
+		{first.Session.ID, false, 6}, {second.Session.ID, false, 5}, {second.Session.ID, true, 4},
+		{first.Session.ID, false, 3}, {second.Session.ID, false, 2}, {second.Session.ID, true, 1},
+	} {
+		var err error
+		if draft.entity {
+			_, err = manager.DraftEntityDieForEntity(draft.sessionID, draft.value)
+		} else {
+			_, err = manager.DraftEntityDie(draft.sessionID, draft.value)
+		}
+		if err != nil {
+			t.Fatalf("report physical draft die: %v", err)
+		}
+	}
+	if _, err := manager.ResolveEntityPlayerAction(first.Session.ID, snapshot.Entity.Presence); err != nil {
+		t.Fatalf("defeat entity: %v", err)
+	}
 	snapshot, err = manager.ResolveRitualPhase(first.Session.ID)
 	if err != nil {
 		t.Fatalf("resolve first card: %v", err)
@@ -304,6 +327,18 @@ func TestRitualFlowRevealsResolvesAndAdvancesPlayers(t *testing.T) {
 	}
 	if snapshot.Ritual.Phase != RitualPhaseEncounter {
 		t.Fatalf("ritual phase after second reveal = %q, want %q", snapshot.Ritual.Phase, RitualPhaseEncounter)
+	}
+}
+
+func TestRitualAcceptsMinorArcanaAndCourtCards(t *testing.T) {
+	firstSeat := 0
+	machine := newRitualState(&firstSeat)
+	entity, err := machine.Reveal(MaxTarotCard, SharedGameState{})
+	if err != nil {
+		t.Fatalf("reveal King of Pentacles: %v", err)
+	}
+	if entity == nil || machine.DrawnCards[0].TarotNumber == nil || *machine.DrawnCards[0].TarotNumber != MaxTarotCard {
+		t.Fatalf("minor/court card was not recorded: machine=%+v entity=%+v", machine, entity)
 	}
 }
 
