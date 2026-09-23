@@ -39,20 +39,21 @@ func (r *Room) snapshot() RoomSnapshot {
 		MaxSeats:    r.MaxSeats,
 		Phase:       r.state.phase(),
 		Ritual:      r.state.Ritual.normalized(),
+		Entity:      r.state.Entity.clone(),
 		Players:     players,
 		GameScreens: gameScreens,
 		Global:      r.state.Global,
 	}
 }
 
-func (s roomState) phase() string {
+func (s GameState) phase() string {
 	if s.Phase == "" {
 		return GamePhaseSetup
 	}
 	return s.Phase
 }
 
-func newRitualState(currentPlayerSeat *int) RitualState {
+func newRitualState(currentPlayerSeat *int) RitualMachine {
 	drawnCards := make([]RitualCard, len(ritualSteps))
 	for index, step := range ritualSteps {
 		drawnCards[index] = RitualCard{
@@ -123,13 +124,24 @@ func canControlRitual(session *Session, room *Room) bool {
 	return player != nil && player.Token == session.ReconnectToken && player.Connected
 }
 
-func nextRitualPlayerSeat(room *Room, currentSeat *int) *int {
-	seats := make([]int, 0, len(room.state.players))
-	for seat, player := range room.state.players {
-		if player != nil && player.ClassID != nil {
-			seats = append(seats, seat)
-		}
+func canControlEntity(session *Session, room *Room) bool {
+	if session.Role != RolePlayer || session.Seat == nil || room.state.Entity == nil {
+		return false
 	}
+	currentSeat := room.state.Entity.CurrentPlayerSeat
+	if currentSeat == nil || *currentSeat != *session.Seat {
+		return false
+	}
+	player := room.state.players[*session.Seat]
+	return player != nil && player.Token == session.ReconnectToken && player.Connected
+}
+
+func nextRitualPlayerSeat(room *Room, currentSeat *int) *int {
+	return nextRitualPlayerSeatFor(room.state.SharedGameState, currentSeat)
+}
+
+func nextRitualPlayerSeatFor(shared SharedGameState, currentSeat *int) *int {
+	seats := eligiblePlayerSeats(shared)
 	if len(seats) == 0 {
 		return copyInt(currentSeat)
 	}
@@ -143,6 +155,55 @@ func nextRitualPlayerSeat(room *Room, currentSeat *int) *int {
 		}
 	}
 	return copyInt(&seats[0])
+}
+
+func eligiblePlayerSeats(shared SharedGameState) []int {
+	seats := make([]int, 0, len(shared.players))
+	for seat, player := range shared.players {
+		if player != nil && player.ClassID != nil {
+			seats = append(seats, seat)
+		}
+	}
+	sort.Ints(seats)
+	return seats
+}
+
+func newEntityMachine(cardTarotNumber, ritualStep int, shared SharedGameState, currentSeat *int) *EntityMachine {
+	turnOrder := eligiblePlayerSeats(shared)
+	if len(turnOrder) == 0 && currentSeat != nil {
+		turnOrder = []int{*currentSeat}
+	}
+	entity := &EntityMachine{
+		CardTarotNumber: cardTarotNumber,
+		RitualStep:      ritualStep,
+		TurnOrder:       turnOrder,
+		CurrentTurn:     0,
+	}
+	if len(turnOrder) > 0 {
+		entity.CurrentPlayerSeat = copyInt(&turnOrder[0])
+	}
+	return entity
+}
+
+func (m *EntityMachine) resolveTurn() {
+	if m == nil || m.Complete {
+		return
+	}
+	if m.CurrentPlayerSeat != nil {
+		m.History = append(m.History, EntityTurn{Seat: *m.CurrentPlayerSeat, Type: "resolved"})
+	}
+	m.Complete = true
+}
+
+func (m *EntityMachine) clone() *EntityMachine {
+	if m == nil {
+		return nil
+	}
+	clone := *m
+	clone.CurrentPlayerSeat = copyInt(m.CurrentPlayerSeat)
+	clone.TurnOrder = append([]int(nil), m.TurnOrder...)
+	clone.History = append([]EntityTurn(nil), m.History...)
+	return &clone
 }
 
 func (r *Room) adminSnapshot() AdminRoomSnapshot {

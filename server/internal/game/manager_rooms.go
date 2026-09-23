@@ -54,7 +54,7 @@ func (m *Manager) CreateRoom(req CreateRoomRequest) (CreateRoomResult, error) {
 		Code:     code,
 		PIN:      pin,
 		MaxSeats: maxSeats,
-		state: roomState{
+		state: GameState{
 			Phase:       GamePhaseSetup,
 			players:     make(map[int]*Player),
 			playerToken: make(map[string]*Player),

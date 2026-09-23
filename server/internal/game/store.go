@@ -19,6 +19,7 @@ type StoredRoom struct {
 	Phase    string         `json:"phase"`
 	Global   GlobalState    `json:"global"`
 	Ritual   RitualState    `json:"ritual"`
+	Entity   *EntityMachine `json:"entity,omitempty"`
 	Players  []StoredPlayer `json:"players"`
 	Screens  []StoredScreen `json:"screens"`
 }
@@ -68,6 +69,7 @@ func (r *Room) stored() StoredRoom {
 		Phase:    r.state.phase(),
 		Global:   r.state.Global,
 		Ritual:   r.state.Ritual.normalized(),
+		Entity:   r.state.Entity.clone(),
 		Players:  players,
 		Screens:  screens,
 	}
@@ -94,10 +96,11 @@ func roomFromStored(stored StoredRoom) (*Room, error) {
 		Code:     code,
 		PIN:      stored.PIN,
 		MaxSeats: stored.MaxSeats,
-		state: roomState{
+		state: GameState{
 			Global:      stored.Global,
 			Phase:       stored.Phase,
 			Ritual:      stored.Ritual.normalized(),
+			Entity:      stored.Entity.clone(),
 			players:     make(map[int]*Player),
 			playerToken: make(map[string]*Player),
 			playerClass: make(map[int]*Player),

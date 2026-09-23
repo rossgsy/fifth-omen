@@ -40,15 +40,21 @@ type Room struct {
 	Code     string
 	PIN      string
 	MaxSeats int
-	state    roomState
+	state    GameState
 }
 
-// roomState is the single mutable state for a room. Keeping all session and
-// game data here makes room transitions atomic under Manager.mu.
-type roomState struct {
+// GameState coordinates the machines for one room. Manager.mu protects this
+// aggregate, so machine transitions and shared-state updates are atomic.
+type GameState struct {
+	SharedGameState
+	Phase  string
+	Ritual RitualMachine
+	Entity *EntityMachine
+}
+
+// SharedGameState is mode-agnostic state available to every game machine.
+type SharedGameState struct {
 	Global      GlobalState
-	Phase       string
-	Ritual      RitualState
 	players     map[int]*Player
 	playerToken map[string]*Player
 	playerClass map[int]*Player
@@ -65,13 +71,17 @@ type GlobalStateUpdate struct {
 	Ward *int `json:"ward,omitempty"`
 }
 
-type RitualState struct {
+// RitualMachine owns the ritual's turn, step, and card history.
+type RitualMachine struct {
 	Phase             string       `json:"phase"`
 	CurrentStep       int          `json:"currentStep"`
 	CurrentPlayerSeat *int         `json:"currentPlayerSeat,omitempty"`
 	Steps             []RitualStep `json:"steps"`
 	DrawnCards        []RitualCard `json:"drawnCards"`
 }
+
+// RitualState remains an alias for persisted and API-facing compatibility.
+type RitualState = RitualMachine
 
 type RitualStep struct {
 	Title string `json:"title"`
@@ -83,6 +93,23 @@ type RitualCard struct {
 	TarotNumber *int   `json:"tarotNumber"`
 	Resolved    bool   `json:"resolved"`
 	Kind        string `json:"kind"`
+}
+
+// EntityMachine is created for each revealed entity. It owns a separate turn
+// order and action history without changing the ritual machine's cursor.
+type EntityMachine struct {
+	CardTarotNumber   int          `json:"cardTarotNumber"`
+	RitualStep        int          `json:"ritualStep"`
+	CurrentPlayerSeat *int         `json:"currentPlayerSeat,omitempty"`
+	TurnOrder         []int        `json:"turnOrder"`
+	CurrentTurn       int          `json:"currentTurn"`
+	History           []EntityTurn `json:"history"`
+	Complete          bool         `json:"complete"`
+}
+
+type EntityTurn struct {
+	Seat int    `json:"seat"`
+	Type string `json:"type"`
 }
 
 type Player struct {
@@ -147,6 +174,7 @@ type RoomSnapshot struct {
 	MaxSeats    int              `json:"maxSeats"`
 	Phase       string           `json:"phase"`
 	Ritual      RitualState      `json:"ritual"`
+	Entity      *EntityMachine   `json:"entity,omitempty"`
 	Players     []PlayerSnapshot `json:"players"`
 	GameScreens int              `json:"gameScreens"`
 	Global      GlobalState      `json:"global"`

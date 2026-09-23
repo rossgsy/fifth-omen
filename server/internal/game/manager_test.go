@@ -280,6 +280,9 @@ func TestRitualFlowRevealsResolvesAndAdvancesPlayers(t *testing.T) {
 	if snapshot.Ritual.DrawnCards[0].TarotNumber == nil || *snapshot.Ritual.DrawnCards[0].TarotNumber != 3 {
 		t.Fatalf("first ritual card = %+v, want tarot 3", snapshot.Ritual.DrawnCards[0])
 	}
+	if snapshot.Entity == nil || snapshot.Entity.CardTarotNumber != 3 || snapshot.Entity.CurrentPlayerSeat == nil || *snapshot.Entity.CurrentPlayerSeat != 0 {
+		t.Fatalf("entity machine after reveal = %+v, want entity card 3 controlled by seat 0", snapshot.Entity)
+	}
 
 	snapshot, err = manager.ResolveRitualPhase(first.Session.ID)
 	if err != nil {
@@ -290,6 +293,9 @@ func TestRitualFlowRevealsResolvesAndAdvancesPlayers(t *testing.T) {
 	}
 	if snapshot.Ritual.CurrentPlayerSeat == nil || *snapshot.Ritual.CurrentPlayerSeat != 1 {
 		t.Fatalf("current ritual player = %v, want seat 1", snapshot.Ritual.CurrentPlayerSeat)
+	}
+	if snapshot.Entity == nil || !snapshot.Entity.Complete || len(snapshot.Entity.History) != 1 || snapshot.Entity.History[0].Seat != 0 {
+		t.Fatalf("resolved entity machine = %+v, want one completed turn for seat 0", snapshot.Entity)
 	}
 
 	snapshot, err = manager.RevealRitualCard(second.Session.ID, 8)

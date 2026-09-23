@@ -66,22 +66,12 @@ func (m *Manager) RevealRitualCard(sessionID string, tarotNumber int) (RoomSnaps
 		m.mu.Unlock()
 		return RoomSnapshot{}, ErrInvalidJoin
 	}
-	card := &room.state.Ritual.DrawnCards[room.state.Ritual.CurrentStep]
-	if card.TarotNumber != nil || card.Resolved {
+	entity, err := room.state.Ritual.Reveal(tarotNumber, room.state.SharedGameState)
+	if err != nil {
 		m.mu.Unlock()
-		return RoomSnapshot{}, ErrInvalidGameState
+		return RoomSnapshot{}, err
 	}
-
-	card.TarotNumber = copyInt(&tarotNumber)
-	switch card.Kind {
-	case "Entity":
-		room.state.Ritual.Phase = RitualPhaseEntity
-	case "Encounter":
-		room.state.Ritual.Phase = RitualPhaseEncounter
-	default:
-		m.mu.Unlock()
-		return RoomSnapshot{}, ErrInvalidGameState
-	}
+	room.state.Entity = entity
 
 	snapshot := room.snapshot()
 	senders := room.senders()
@@ -116,24 +106,19 @@ func (m *Manager) ResolveRitualPhase(sessionID string) (RoomSnapshot, error) {
 		m.mu.Unlock()
 		return RoomSnapshot{}, ErrInvalidGameState
 	}
-	if !canControlRitual(session, room) {
+	if room.state.Ritual.Phase == RitualPhaseEntity {
+		if !canControlEntity(session, room) {
+			m.mu.Unlock()
+			return RoomSnapshot{}, ErrInvalidJoin
+		}
+	} else if !canControlRitual(session, room) {
 		m.mu.Unlock()
 		return RoomSnapshot{}, ErrInvalidJoin
 	}
 
-	currentStep := room.state.Ritual.CurrentStep
-	card := &room.state.Ritual.DrawnCards[currentStep]
-	if card.TarotNumber == nil {
+	if err := room.state.Ritual.Resolve(room.state.SharedGameState, room.state.Entity); err != nil {
 		m.mu.Unlock()
-		return RoomSnapshot{}, ErrInvalidGameState
-	}
-	card.Resolved = true
-	if currentStep >= len(ritualSteps)-1 {
-		room.state.Ritual.Phase = RitualPhaseComplete
-	} else {
-		room.state.Ritual.CurrentStep++
-		room.state.Ritual.Phase = RitualPhaseRitual
-		room.state.Ritual.CurrentPlayerSeat = nextRitualPlayerSeat(room, room.state.Ritual.CurrentPlayerSeat)
+		return RoomSnapshot{}, err
 	}
 
 	snapshot := room.snapshot()
